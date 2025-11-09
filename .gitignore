@@ -3,4 +3,4 @@ electron/node_modules/
 dist/
 .env
 *.log
-node_modules
+
