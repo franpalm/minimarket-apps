@@ -1,0 +1,24 @@
+{
+  "name": "minimarket-root",
+  "private": true,
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.12",
+    "concurrently": "^8.2.2",
+    "cross-env": "^10.1.0",
+    "electron": "^39.1.1",
+    "wait-on": "^8.0.5"
+  },
+  "scripts": {
+    "start": "cd app && npm start",
+    "backend": "cd minimarket-app/electron && node server.js",
+    "dev": "concurrently \"npm run backend\" \"npm start\"",
+    "electron-dev": "concurrently \"npm run backend\" \"cd minimarket-app/electron && set ELECTRON_DEV=true && electron .\"",
+    "dev-all": "concurrently \"cd app && npm start\" \"cd backend && python manage.py runserver\" \"wait-on tcp:3000 && cd backend/electron && set ELECTRON_DEV=true && electron .\""
+  },
+  "dependencies": {
+    "chart.js": "^4.5.0",
+    "mercadopago": "^2.9.0",
+    "react-chartjs-2": "^5.3.0",
+    "transbank-sdk": "^6.1.0"
+  }
+}

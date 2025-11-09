@@ -1,0 +1,53 @@
+# Node modules
+node_modules/
+backend/electron/node_modules/
+app/node_modules/
+backend/electron/node_modules/electron/dist/electron.exe
+# Build y dist
+app/build/
+dist/
+*.log
+
+# Electron ejecutables y binarios grandes
+*.exe
+*.dll
+
+# Base de datos local
+db.sqlite3
+
+# Archivos temporales
+*.tmp
+*.swp
+*.bak
+
+# IDE/Editor
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# MacOS
+.DS_Store
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Coverage/test
+coverage/
+*.coverage
+*.lcov
+
+# Otros builds
+out/
+
+# Otros
+.env
+
+# Archivos y carpetas de Firebase
+firebase-debug.log
+.firebase/
+.firebaserc
+
+# entorno virtual
+venv/
