@@ -1,3 +1,6 @@
-node_modules/
-.env
+# Ignorar node_modules y archivos pesados
+electron/node_modules/
 dist/
+.env
+*.log
+node_modules
