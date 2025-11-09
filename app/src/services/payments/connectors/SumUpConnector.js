@@ -1,0 +1,1 @@
+// SumUpConnector.js - Conector para terminales SumUp

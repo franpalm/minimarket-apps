@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Control de Gastos - Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+  <style id="app-style">
+    .bg-gradient {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .receipt-icon {
+      transition: transform 0.2s ease;
+    }
+    .receipt-icon:hover {
+      transform: scale(1.2);
+    }
+    .btn-primary {
+      transition: all 0.3s ease;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .quick-entry {
+      box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s ease;
+    }
+    .quick-entry:hover {
+      box-shadow: 0 7px 14px rgba(50, 50, 93, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08);
+    }
+    .hidden {
+      display: none;
+    }
+    .card {
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+      .print-only {
+        display: block !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <!-- Header with login status -->
+  <header class="bg-gradient text-white p-4 shadow-md">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 class="text-2xl font-bold">Sistema de Control de Gastos</h1>
+      <div class="flex items-center space-x-4">
+        <span id="user-name" class="hidden md:block">Bienvenido, Usuario</span>
+        <button id="logout-btn" class="bg-white text-indigo-600 px-4 py-2 rounded-md hover:bg-opacity-90 transition">
+          <i class="fas fa-sign-out-alt mr-2"></i>Salir
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main dashboard content -->
+  <main class="container mx-auto px-4 py-6">
+    <!-- Filter toolbar -->
+    <section class="bg-white rounded-lg shadow-md p-4 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Rango de fechas</label>
+          <div class="relative">
+            <input type="text" id="date-range" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 border" placeholder="Seleccionar fechas">
+            <i class="fas fa-calendar absolute right-3 top-2.5 text-gray-400"></i>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+          <select id="category-filter" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 border">
+            <option value="">Todas las categorías</option>
+            <option value="arriendo">Arriendo</option>
+            <option value="servicios">Servicios</option>
+            <option value="insumos">Insumos</option>
+            <option value="sueldos">Sueldos</option>
+            <option value="imprevistos">Imprevistos</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Método de pago</label>
+          <select id="payment-filter" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 border">
+            <option value="">Todos los métodos</option>
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="tarjeta">Tarjeta</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
+          <div class="relative">
+            <input type="text" id="search" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 pl-10 border" placeholder="Buscar gastos...">
+            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Quick Entry Form (1/3 width on large screens) -->
+      <section class="quick-entry bg-white rounded-lg shadow-md p-6 lg:col-span-1">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-xl font-bold text-gray-800">Registro Rápido</h2>
+          <button id="toggle-form" class="text-gray-500 hover:text-gray-700">
+            <i class="fas fa-chevron-up"></i>
+          </button>
+        </div>
+        
+        <form id="expense-form" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha del gasto</label>
+            <div class="relative">
+              <input type="text" id="expense-date" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 border" required>
+              <i class="fas fa-calendar absolute right-3 top-2.5 text-gray-400"></i>
+            </div>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+            <div class="flex items-center">
+              <select id="expense-category" class="w-full rounded-l-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 border" required>
+                <option value="">Seleccionar categoría</option>
+                <option value="arriendo">Arriendo</option>
+                <option value="servicios">Servicios</option>
+                <option value="insumos">Insumos</option>
+                <option value="sueldos">Sueldos</option>
+                <option value="imprevistos">Imprevistos</option>
+              </select>
+              <button type="button" id="add-category" class="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-r-md px-3 py-2 border border-gray-300 border-l-0">
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Monto</label>
+            <div class="relative">
+              <span class="absolute left-3 top-2.5 text-gray-500">$</span>
+              <input type="number" id="expense-amount" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 pl-8 border" required min="0" step="0.01">
+            </div>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Método de pago</label>
+            <select id="expense-payment-method" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 border" required>
+              <option value="">Seleccionar método</option>
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="tarjeta">Tarjeta</option>
+            </select>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Descripción/Comentario</label>
+            <textarea id="expense-description" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 border" rows="2"></textarea>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Adjuntar comprobante (opcional)</label>
+            <div class="flex items-center justify-center w-full">
+              <label class="flex flex-col w-full h-24 border-2 border-dashed border-gray-300 hover:bg-gray-50 hover:border-gray-400 rounded-lg cursor-pointer">
+                <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                  <i class="fas fa-cloud-upload-alt text-3xl text-gray-400"></i>
+                  <p class="text-xs text-gray-500">Arrastra o haz clic para subir</p>
+                </div>
+                <input id="expense-receipt" type="file" class="hidden" accept="image/*,.pdf">
+              </label>
+            </div>
+            <div id="file-name" class="text-xs text-gray-500 mt-1"></div>
+          </div>
+          
+          <button type="submit" class="btn-primary w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">
+            <i class="fas fa-save mr-2"></i>Registrar Gasto
+          </button>
+        </form>
+      </section>
+      
+      <!-- Expense Table (2/3 width on large screens) -->
+      <section class="bg-white rounded-lg shadow-md p-6 lg:col-span-2">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Listado de Gastos</h2>
+        
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Fecha <i class="fas fa-sort ml-1"></i>
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Categoría
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Monto <i class="fas fa-sort ml-1"></i>
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Método de Pago
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Descripción
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Comp.
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Acciones
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200" id="expenses-table-body">
+              <!-- Sample data will be loaded dynamically -->
+            </tbody>
+          </table>
+        </div>
+        
+        <div class="flex justify-between items-center mt-4">
+          <div class="text-sm text-gray-700">
+            Mostrando <span id="showing-count">0</span> de <span id="total-count">0</span> gastos
+          </div>
+          <div class="flex items-center space-x-2">
+            <button id="prev-page" class="px-3 py-1 border border-gray-300 rounded-md text-sm bg-white hover:bg-gray-50 disabled:opacity-50">
+              <i class="fas fa-chevron-left"></i>
+            </button>
+            <span id="current-page" class="text-sm text-gray-700">Página 1</span>
+            <button id="next-page" class="px-3 py-1 border border-gray-300 rounded-md text-sm bg-white hover:bg-gray-50 disabled:opacity-50">
+              <i class="fas fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+    
+    <!-- Analytics Section -->
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <!-- Monthly Comparison -->
+      <section class="card bg-white rounded-lg shadow-md p-6 md:col-span-2">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Comparativa Mensual</h2>
+        <canvas id="monthly-chart" height="200"></canvas>
+      </section>
+      
+      <!-- Category Breakdown -->
+      <section class="card bg-white rounded-lg shadow-md p-6 md:col-span-1">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Distribución por Categoría</h2>
+        <canvas id="category-chart" height="200"></canvas>
+      </section>
+    </div>
+    
+    <!-- Budget Alert (shown only when needed) -->
+    <div id="budget-alert" class="mt-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 hidden">
+      <div class="flex items-center">
+        <div class="flex-shrink-0">
+          <i class="fas fa-exclamation-circle text-red-500"></i>
+        </div>
+        <div class="ml-3">
+          <p class="text-sm">¡Alerta! Has excedido tu presupuesto mensual de <span id="budget-limit">$0</span>. Gasto actual: <span id="current-spend">$0</span></p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Export Section -->
+    <div class="fixed bottom-0 right-0 p-4 no-print">
+      <div class="bg-white rounded-lg shadow-lg p-2 flex space-x-2">
+        <button id="export-btn" class="btn-primary bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">
+          <i class="fas fa-download mr-2"></i>Exportar
+        </button>
+        <button id="print-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">
+          <i class="fas fa-print"></i>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal for Add Category -->
+  <div id="category-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-gray-800">Agregar Nueva Categoría</h3>
+        <button id="close-category-modal" class="text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <form id="category-form">
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Nombre de la Categoría</label>
+          <input type="text" id="new-category-name" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 border" required>
+        </div>
+        <div class="flex justify-end space-x-2">
+          <button type="button" id="cancel-category" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-gray-700">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal for Export Options -->
+  <div id="export-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-gray-800">Exportar Datos</h3>
+        <button id="close-export-modal" class="text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <button id="export-excel" class="w-full py-3 px-4 flex items-center justify-center bg-green-600 hover:bg-green-700 text-white rounded-md">
+          <i class="fas fa-file-excel mr-2"></i> Exportar a Excel
+        </button>
+        <button id="export-pdf" class="w-full py-3 px-4 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded-md">
+          <i class="fas fa-file-pdf mr-2"></i> Exportar a PDF
+        </button>
+        <button id="export-csv" class="w-full py-3 px-4 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-md">
+          <i class="fas fa-file-csv mr-2"></i> Exportar a CSV
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Receipt Preview Modal -->
+  <div id="receipt-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-gray-800">Vista Previa del Comprobante</h3>
+        <button id="close-receipt-modal" class="text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="flex items-center justify-center p-4">
+        <img id="receipt-preview" class="max-h-96 max-w-full" src="" alt="Comprobante">
+      </div>
+      <div class="flex justify-end mt-4">
+        <button id="download-receipt" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md">
+          <i class="fas fa-download mr-2"></i>Descargar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Expense Modal -->
+  <div id="edit-expense-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-gray-800">Editar Gasto</h3>
+        <button id="close-edit-modal" class="text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <form id="edit-expense-form" class="space-y-4">
+        <input type="hidden" id="edit-expense-id">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Fecha del gasto</label>
+          <div class="relative">
+            <input type="text" id="edit-expense-date" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 border" required>
+            <i class="fas fa-calendar absolute right-3 top-2.5 text-gray-400"></i>
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+          <select id="edit-expense-category" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 border" required>
+            <option value="">Seleccionar categoría</option>
+            <option value="arriendo">Arriendo</option>
+            <option value="servicios">Servicios</option>
+            <option value="insumos">Insumos</option>
+            <option value="sueldos">Sueldos</option>
+            <option value="imprevistos">Imprevistos</option>
+          </select>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Monto</label>
+          <div class="relative">
+            <span class="absolute left-3 top-2.5 text-gray-500">$</span>
+            <input type="number" id="edit-expense-amount" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 pl-8 border" required min="0" step="0.01">
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Método de pago</label>
+          <select id="edit-expense-payment-method" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 border" required>
+            <option value="">Seleccionar método</option>
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="tarjeta">Tarjeta</option>
+          </select>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Descripción/Comentario</label>
+          <textarea id="edit-expense-description" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 px-4 py-2 border" rows="2"></textarea>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Adjuntar nuevo comprobante (opcional)</label>
+          <div class="flex items-center justify-center w-full">
+            <label class="flex flex-col w-full h-24 border-2 border-dashed border-gray-300 hover:bg-gray-50 hover:border-gray-400 rounded-lg cursor-pointer">
+              <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                <i class="fas fa-cloud-upload-alt text-3xl text-gray-400"></i>
+                <p class="text-xs text-gray-500">Arrastra o haz clic para subir</p>
+              </div>
+              <input id="edit-expense-receipt" type="file" class="hidden" accept="image/*,.pdf">
+            </label>
+          </div>
+          <div id="edit-file-name" class="text-xs text-gray-500 mt-1"></div>
+        </div>
+        
+        <div class="flex space-x-2 justify-end">
+          <button type="button" id="cancel-edit" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-gray-700">Cancelar</button>
+          <button type="submit" class="btn-primary bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">
+            Guardar Cambios
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="delete-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-gray-800">Confirmar Eliminación</h3>
+        <button id="close-delete-modal" class="text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <p class="text-gray-600 mb-6">¿Estás seguro de que deseas eliminar este gasto? Esta acción no se puede deshacer.</p>
+      <div class="flex justify-end space-x-2">
+        <button id="cancel-delete" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-gray-700">Cancelar</button>
+        <button id="confirm-delete" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Print-only section -->
+  <div class="hidden print-only p-8">
+    <h1 class="text-2xl font-bold mb-4">Informe de Gastos</h1>
+    <p class="mb-4">Fecha de impresión: <span id="print-date"></span></p>
+    <table class="w-full border-collapse border border-gray-300 mb-4">
+      <thead>
+        <tr>
+          <th class="border border-gray-300 p-2">Fecha</th>
+          <th class="border border-gray-300 p-2">Categoría</th>
+          <th class="border border-gray-300 p-2">Monto</th>
+          <th class="border border-gray-300 p-2">Método</th>
+          <th class="border border-gray-300 p-2">Descripción</th>
+        </tr>
+      </thead>
+      <tbody id="print-table-body">
+        <!-- Print data will be inserted here -->
+      </tbody>
+    </table>
+    <div class="flex justify-between">
+      <div>
+        <p><strong>Total Gastos:</strong> $<span id="print-total">0.00</span></p>
+      </div>
+      <div>
+        <p>Página 1</p>
+      </div>
+    </div>
+  </div>
+
+  <script id="app-script">
+    document.addEventListener('DOMContentLoaded', function() {
+      // Initialize date pickers
+      flatpickr("#expense-date", {
+        locale: "es",
+        dateFormat: "d/m/Y",
+        defaultDate: "today"
+      });
+      
+      flatpickr("#edit-expense-date", {
+        locale: "es",
+        dateFormat: "d/m/Y"
+      });
+
+      flatpickr("#date-range", {
+        locale: "es",
+        dateFormat: "d/m/Y",
+        mode: "range"
+      });
+
+      // Initialize the expenses array and load data
+      let expenses = [];
+      let currentPage = 1;
+      const itemsPerPage = 10;
+      let currentExpenseId = 0;
+      const budgetLimit = 5000000; // Example budget limit
+
+      // Example data - this would normally come from an API
+      const initialExpenses = [
+        {
+          id: 1,
+          date: "10/05/2023",
+          category: "arriendo",
+          amount: 1200000,
+          paymentMethod: "transferencia",
+          description: "Arriendo oficina central",
+          receipt: null
+        },
+        {
+          id: 2,
+          date: "05/05/2023",
+          category: "servicios",
+          amount: 150000,
+          paymentMethod: "tarjeta",
+          description: "Pago de servicios básicos",
+          receipt: null
+        },
+        {
+          id: 3,
+          date: "15/05/2023",
+          category: "insumos",
+          amount: 450000,
+          paymentMethod: "efectivo",
+          description: "Compra de materiales de oficina",
+          receipt: null
+        },
+        {
+          id: 4,
+          date: "20/05/2023",
+          category: "sueldos",
+          amount: 2500000,
+          paymentMethod: "transferencia",
+          description: "Pago de nómina mensual",
+          receipt: null
+        },
+        {
+          id: 5,
+          date: "25/05/2023",
+          category: "imprevistos",
+          amount: 180000,
+          paymentMethod: "efectivo",
+          description: "Reparación impresora",
+          receipt: null
+        }
+      ];
+      
+      // Initialize data in localStorage if not exists
+      if (!localStorage.getItem('expenses')) {
+        localStorage.setItem('expenses', JSON.stringify(initialExpenses));
+        currentExpenseId = 5;
+      } else {
+        const storedExpenses = JSON.parse(localStorage.getItem('expenses'));
+        if (storedExpenses.length > 0) {
+          currentExpenseId = Math.max(...storedExpenses.map(e => e.id));
+        }
+      }
+      
+      // Load expenses from localStorage
+      function loadExpenses() {
+        expenses = JSON.parse(localStorage.getItem('expenses')) || [];
+        displayExpenses();
+        updateCharts();
+        checkBudget();
+      }
+      
+      // Display expenses in the table
+      function displayExpenses() {
+        const tableBody = document.getElementById('expenses-table-body');
+        tableBody.innerHTML = '';
+        
+        // Apply filters
+        const categoryFilter = document.getElementById('category-filter').value;
+        const paymentFilter = document.getElementById('payment-filter').value;
+        const searchFilter = document.getElementById('search').value.toLowerCase();
+        const dateRange = document.getElementById('date-range').value;
+        
+        let filteredExpenses = [...expenses];
+        
+        if (categoryFilter) {
+          filteredExpenses = filteredExpenses.filter(e => e.category === categoryFilter);
+        }
+        
+        if (paymentFilter) {
+          filteredExpenses = filteredExpenses.filter(e => e.paymentMethod === paymentFilter);
+        }
+        
+        if (searchFilter) {
+          filteredExpenses = filteredExpenses.filter(e => 
+            e.description.toLowerCase().includes(searchFilter) || 
+            e.category.toLowerCase().includes(searchFilter)
+          );
+        }
+        
+        // Update pagination info
+        document.getElementById('showing-count').textContent = filteredExpenses.length;
+        document.getElementById('total-count').textContent = expenses.length;
+        document.getElementById('current-page').textContent = `Página ${currentPage}`;
+        
+        // Slice for pagination
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const paginatedExpenses = filteredExpenses.slice(startIndex, startIndex + itemsPerPage);
+        
+        // Update pagination buttons
+        document.getElementById('prev-page').disabled = currentPage === 1;
+        document.getElementById('next-page').disabled = startIndex + itemsPerPage >= filteredExpenses.length;
+        
+        // Display expenses
+        paginatedExpenses.forEach(expense => {
+          const row = document.createElement('tr');
+          
+          // Format the amount with commas and decimals
+          const formattedAmount = new Intl.NumberFormat('es-CL', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+          }).format(expense.amount);
+          
+          // Format the category
+          const categoryDisplay = expense.category.charAt(0).toUpperCase() + expense.category.slice(1);
+          
+          // Format payment method
+          const paymentDisplay = expense.paymentMethod.charAt(0).toUpperCase() + expense.paymentMethod.slice(1);
+          
+          row.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${expense.date}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${categoryDisplay}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${formattedAmount}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${paymentDisplay}</td>
+            <td class="px-6 py-4 text-sm text-gray-900">${expense.description || '-'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              ${expense.receipt ? `
+                <button class="receipt-icon text-blue-600 hover:text-blue-800" data-id="${expense.id}">
+                  <i class="fas fa-file-image"></i>
+                </button>
+              ` : '-'}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              <div class="flex space-x-2">
+                <button class="edit-expense text-indigo-600 hover:text-indigo-800" data-id="${expense.id}">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="delete-expense text-red-600 hover:text-red-800" data-id="${expense.id}">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          `;
+          
+          tableBody.appendChild(row);
+        });
+        
+        // Add event listeners to buttons
+        document.querySelectorAll('.edit-expense').forEach(button => {
+          button.addEventListener('click', function() {
+            const id = parseInt(this.getAttribute('data-id'));
+            openEditModal(id);
+          });
+        });
+        
+        document.querySelectorAll('.delete-expense').forEach(button => {
+          button.addEventListener('click', function() {
+            const id = parseInt(this.getAttribute('data-id'));
+            openDeleteModal(id);
+          });
+        });
+        
+        document.querySelectorAll('.receipt-icon').forEach(button => {
+          button.addEventListener('click', function() {
+            const id = parseInt(this.getAttribute('data-id'));
+            openReceiptModal(id);
+          });
+        });
+      }
+      
+      // Submit form handler
+      document.getElementById('expense-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Increment ID counter
+        currentExpenseId++;
+        
+        // Get form values
+        const expense = {
+          id: currentExpenseId,
+          date: document.getElementById('expense-date').value,
+          category: document.getElementById('expense-category').value,
+          amount: parseFloat(document.getElementById('expense-amount').value),
+          paymentMethod: document.getElementById('expense-payment-method').value,
+          description: document.getElementById('expense-description').value,
+          receipt: null // Will be updated if there's a file
+        };
+        
+        // Handle file upload
+        const fileInput = document.getElementById('expense-receipt');
+        if (fileInput.files && fileInput.files[0]) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            expense.receipt = e.target.result;
+            saveExpense(expense);
+          };
+          reader.readAsDataURL(fileInput.files[0]);
+        } else {
+          saveExpense(expense);
+        }
+      });
+      
+      function saveExpense(expense) {
+        // Add the new expense to the array
+        expenses.push(expense);
+        
+        // Save to localStorage
+        localStorage.setItem('expenses', JSON.stringify(expenses));
+        
+        // Reset form
+        document.getElementById('expense-form').reset();
+        document.getElementById('file-name').textContent = '';
+        
+        // Re-initialize date picker
+        flatpickr("#expense-date", {
+          locale: "es",
+          dateFormat: "d/m/Y",
+          defaultDate: "today"
+        });
+        
+        // Update display
+        loadExpenses();
+      }
+      
+      // File input change handler
+      document.getElementById('expense-receipt').addEventListener('change', function() {
+        if (this.files && this.files[0]) {
+          document.getElementById('file-name').textContent = this.files[0].name;
+        }
+      });
+      
+      document.getElementById('edit-expense-receipt').addEventListener('change', function() {
+        if (this.files && this.files[0]) {
+          document.getElementById('edit-file-name').textContent = this.files[0].name;
+        }
+      });
+      
+      // Add category modal handlers
+      document.getElementById('add-category').addEventListener('click', function() {
+        document.getElementById('category-modal').classList.remove('hidden');
+      });
+      
+      document.getElementById('close-category-modal').addEventListener('click', function() {
+        document.getElementById('category-modal').classList.add('hidden');
+      });
+      
+      document.getElementById('cancel-category').addEventListener('click', function() {
+        document.getElementById('category-modal').classList.add('hidden');
+      });
+      
+      document.getElementById('category-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Get the new category name
+        const newCategory = document.getElementById('new-category-name').value;
+        
+        // Add the new option to both category dropdowns
+        const mainCategorySelect = document.getElementById('expense-category');
+        const filterCategorySelect = document.getElementById('category-filter');
+        const editCategorySelect = document.getElementById('edit-expense-category');
+        
+        const newOption = document.createElement('option');
+        newOption.value = newCategory.toLowerCase();
+        newOption.textContent = newCategory;
+        
+        mainCategorySelect.appendChild(newOption.cloneNode(true));
+        filterCategorySelect.appendChild(newOption.cloneNode(true));
+        editCategorySelect.appendChild(newOption.cloneNode(true));
+        
+        // Close the modal and reset form
+        document.getElementById('category-modal').classList.add('hidden');
+        document.getElementById('category-form').reset();
+      });
+      
+      // Export modal handlers
+      document.getElementById('export-btn').addEventListener('click', function() {
+        document.getElementById('export-modal').classList.remove('hidden');
+      });
+      
+      document.getElementById('close-export-modal').addEventListener('click', function() {
+        document.getElementById('export-modal').classList.add('hidden');
+      });
+      
+      document.getElementById('export-excel').addEventListener('click', function() {
+        alert("Esta función estará disponible en la versión completa.");
+        document.getElementById('export-modal').classList.add('hidden');
+      });
+      
+      document.getElementById('export-pdf').addEventListener('click', function() {
+        alert("Esta función estará disponible en la versión completa.");
+        document.getElementById('export-modal').classList.add('hidden');
+      });
+      
+      document.getElementById('export-csv').addEventListener('click', function() {
+        alert("Esta función estará disponible en la versión completa.");
+        document.getElementById('export-modal').classList.add('hidden');
+      });
+      
+      // Print functionality
+      document.getElementById('print-btn').addEventListener('click', function() {
+        // Populate print table
+        const printTableBody = document.getElementById('print-table-body');
+        printTableBody.innerHTML = '';
+        
+        let totalAmount = 0;
+        
+        expenses.forEach(expense => {
+          const row = document.createElement('tr');
+          
+          totalAmount += expense.amount;
+          
+          const formattedAmount = new Intl.NumberFormat('es-CL', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+          }).format(expense.amount);
+          
+          row.innerHTML = `
+            <td class="border border-gray-300 p-2">${expense.date}</td>
+            <td class="border border-gray-300 p-2">${expense.category}</td>
+            <td class="border border-gray-300 p-2">$${formattedAmount}</td>
+            <td class="border border-gray-300 p-2">${expense.paymentMethod}</td>
+            <td class="border border-gray-300 p-2">${expense.description || '-'}</td>
+          `;
+          
+          printTableBody.appendChild(row);
+        });
+        
+        // Set the total and date
+        const now = new Date();
+        document.getElementById('print-date').textContent = now.toLocaleDateString('es-CL');
+        document.getElementById('print-total').textContent = new Intl.NumberFormat('es-CL', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(totalAmount);
+        
+        // Trigger print
+        window.print();
+      });
+      
+      // Collapse/expand quick entry form
+      document.getElementById('toggle-form').addEventListener('click', function() {
+        const form = document.getElementById('expense-form');
+        const icon = this.querySelector('i');
+        
+        if (form.classList.contains('hidden')) {
+          form.classList.remove('hidden');
+          icon.classList.remove('fa-chevron-down');
+          icon.classList.add('fa-chevron-up');
+        } else {
+          form.classList.add('hidden');
+          icon.classList.remove('fa-chevron-up');
+          icon.classList.add('fa-chevron-down');
+        }
+      });
+      
+      // Edit expense functionality
+      function openEditModal(id) {
+        const expense = expenses.find(e => e.id === id);
+        
+        if (expense) {
+          // Fill the edit form
+          document.getElementById('edit-expense-id').value = expense.id;
+          document.getElementById('edit-expense-date').value = expense.date;
+          document.getElementById('edit-expense-category').value = expense.category;
+          document.getElementById('edit-expense-amount').value = expense.amount;
+          document.getElementById('edit-expense-payment-method').value = expense.paymentMethod;
+          document.getElementById('edit-expense-description').value = expense.description;
+          document.getElementById('edit-file-name').textContent = expense.receipt ? 'Comprobante existente' : '';
+          
+          // Show the modal
+          document.getElementById('edit-expense-modal').classList.remove('hidden');
+          
+          // Initialize flatpickr for date field
+          flatpickr("#edit-expense-date", {
+            locale: "es",
+            dateFormat: "d/m/Y",
+            defaultDate: expense.date
+          });
+        }
+      }
+      
+      document.getElementById('close-edit-modal').addEventListener('click', function() {
+        document.getElementById('edit-expense-modal').classList.add('hidden');
+      });
+      
+      document.getElementById('cancel-edit').addEventListener('click', function() {
+        document.getElementById('edit-expense-modal').classList.add('hidden');
+      });
+      
+      document.getElementById('edit-expense-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const id = parseInt(document.getElementById('edit-expense-id').value);
+        const index = expenses.findIndex(e => e.id === id);
+        
+        if (index !== -1) {
+          // Update expense object
+          const updatedExpense = {
+            id: id,
+            date: document.getElementById('edit-expense-date').value,
+            category: document.getElementById('edit-expense-category').value,
+            amount: parseFloat(document.getElementById('edit-expense-amount').value),
+            paymentMethod: document.getElementById('edit-expense-payment-method').value,
+            description: document.getElementById('edit-expense-description').value,
+            receipt: expenses[index].receipt // Keep existing receipt by default
+          };
+          
+          // Handle file upload
+          const fileInput = document.getElementById('edit-expense-receipt');
+          if (fileInput.files && fileInput.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+              updatedExpense.receipt = e.target.result;
+              saveUpdatedExpense(index, updatedExpense);
+            };
+            reader.readAsDataURL(fileInput.files[0]);
+          } else {
+            saveUpdatedExpense(index, updatedExpense);
+          }
+        }
+      });
+      
+      function saveUpdatedExpense(index, updatedExpense) {
+        // Update the expense in the array
+        expenses[index] = updatedExpense;
+        
+        // Save to localStorage
+        localStorage.setItem('expenses', JSON.stringify(expenses));
+        
+        // Close modal and update display
+        document.getElementById('edit-expense-modal').classList.add('hidden');
+        loadExpenses();
+      }
+      
+      // Delete expense functionality
+      let deleteExpenseId = null;
+      
+      function openDeleteModal(id) {
+        deleteExpenseId = id;
+        document.getElementById('delete-modal').classList.remove('hidden');
+      }
+      
+      document.getElementById('close-delete-modal').addEventListener('click', function() {
+        document.getElementById('delete-modal').classList.add('hidden');
+      });
+      
+      document.getElementById('cancel-delete').addEventListener('click', function() {
+        document.getElementById('delete-modal').classList.add('hidden');
+      });
+      
+      document.getElementById('confirm-delete').addEventListener('click', function() {
+        if (deleteExpenseId !== null) {
+          // Remove the expense from array
+          expenses = expenses.filter(e => e.id !== deleteExpenseId);
+          
+          // Save to localStorage
+          localStorage.setItem('expenses', JSON.stringify(expenses));
+          
+          // Close modal and update display
+          document.getElementById('delete-modal').classList.add('hidden');
+          loadExpenses();
+        }
+      });
+      
+      // Receipt modal functionality
+      function openReceiptModal(id) {
+        const expense = expenses.find(e => e.id === id);
+        
+        if (expense && expense.receipt) {
+          document.getElementById('receipt-preview').src = expense.receipt;
+          document.getElementById('receipt-modal').classList.remove('hidden');
+        }
+      }
+      
+      document.getElementById('close-receipt-modal').addEventListener('click', function() {
+        document.getElementById('receipt-modal').classList.add('hidden');
+      });
+      
+      document.getElementById('download-receipt').addEventListener('click', function() {
+        const receiptImg = document.getElementById('receipt-preview');
+        
+        // Create a temporary link and trigger download
+        const link = document.createElement('a');
+        link.href = receiptImg.src;
+        link.download = `comprobante-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+      
+      // Pagination handlers
+      document.getElementById('prev-page').addEventListener('click', function() {
+        if (currentPage > 1) {
+          currentPage--;
+          displayExpenses();
+        }
+      });
+      
+      document.getElementById('next-page').addEventListener('click', function() {
+        currentPage++;
+        displayExpenses();
+      });
+      
+      // Filter handlers
+      document.getElementById('category-filter').addEventListener('change', function() {
+        currentPage = 1;
+        displayExpenses();
+      });
+      
+      document.getElementById('payment-filter').addEventListener('change', function() {
+        currentPage = 1;
+        displayExpenses();
+      });
+      
+      document.getElementById('search').addEventListener('input', function() {
+        currentPage = 1;
+        displayExpenses();
+      });
+      
+      document.getElementById('date-range').addEventListener('change', function() {
+        currentPage = 1;
+        displayExpenses();
+      });
+      
+      // Charts initialization
+      function updateCharts() {
+        // Monthly comparison chart
+        const monthlyCtx = document.getElementById('monthly-chart').getContext('2d');
+        
+        // Group expenses by month
+        const monthlyData = {};
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        
+        // Initialize last 6 months
+        for (let i = 5; i >= 0; i--) {
+          const month = new Date(currentYear, currentMonth - i, 1);
+          const monthKey = `${month.getMonth() + 1}/${month.getFullYear()}`;
+          monthlyData[monthKey] = 0;
+        }
+        
+        // Sum expenses by month
+        expenses.forEach(expense => {
+          const parts = expense.date.split('/');
+          const month = parseInt(parts[1]);
+          const year = parseInt(parts[2]);
+          const monthKey = `${month}/${year}`;
+          
+          if (monthlyData[monthKey] !== undefined) {
+            monthlyData[monthKey] += expense.amount;
+          }
+        });
+        
+        // Convert to arrays for Chart.js
+        const months = Object.keys(monthlyData);
+        const amounts = Object.values(monthlyData);
+        
+        // Format months for display
+        const displayMonths = months.map(m => {
+          const [month, year] = m.split('/');
+          const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+          return `${monthNames[parseInt(month) - 1]} ${year}`;
+        });
+        
+        if (window.monthlyChart) {
+          window.monthlyChart.destroy();
+        }
+        
+        window.monthlyChart = new Chart(monthlyCtx, {
+          type: 'line',
+          data: {
+            labels: displayMonths,
+            datasets: [{
+              label: 'Total Gastos Mensuales',
+              data: amounts,
+              backgroundColor: 'rgba(102, 126, 234, 0.2)',
+              borderColor: 'rgba(102, 126, 234, 1)',
+              borderWidth: 2,
+              pointBackgroundColor: 'rgba(102, 126, 234, 1)',
+              tension: 0.4
+            }]
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: function(value) {
+                    return '$' + value.toLocaleString('es-CL');
+                  }
+                }
+              }
+            },
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    return '$' + context.raw.toLocaleString('es-CL');
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        // Category breakdown chart
+        const categoryCtx = document.getElementById('category-chart').getContext('2d');
+        
+        // Group expenses by category
+        const categoryData = {};
+        
+        expenses.forEach(expense => {
+          if (!categoryData[expense.category]) {
+            categoryData[expense.category] = 0;
+          }
+          categoryData[expense.category] += expense.amount;
+        });
+        
+        // Convert to arrays for Chart.js
+        const categories = Object.keys(categoryData);
+        const categoryAmounts = Object.values(categoryData);
+        
+        // Format categories for display (capitalize)
+        const displayCategories = categories.map(c => c.charAt(0).toUpperCase() + c.slice(1));
+        
+        // Generate colors for each category
+        const colors = [
+          'rgba(102, 126, 234, 0.8)',
+          'rgba(118, 75, 162, 0.8)',
+          'rgba(237, 100, 166, 0.8)',
+          'rgba(246, 173, 85, 0.8)',
+          'rgba(90, 206, 132, 0.8)',
+          'rgba(22, 160, 133, 0.8)',
+          'rgba(243, 156, 18, 0.8)',
+          'rgba(231, 76, 60, 0.8)'
+        ];
+        
+        if (window.categoryChart) {
+          window.categoryChart.destroy();
+        }
+        
+        window.categoryChart = new Chart(categoryCtx, {
+          type: 'pie',
+          data: {
+            labels: displayCategories,
+            datasets: [{
+              data: categoryAmounts,
+              backgroundColor: colors.slice(0, categories.length),
+              borderWidth: 1
+            }]
+          },
+          options: {
+            plugins: {
+              legend: {
+                position: 'right'
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const label = context.label || '';
+                    const value = context.raw;
+                    const percentage = ((value / categoryAmounts.reduce((a, b) => a + b, 0)) * 100).toFixed(1);
+                    return `${label}: $${value.toLocaleString('es-CL')} (${percentage}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+      
+      // Budget alert check
+      function checkBudget() {
+        // Calculate total expenses for current month
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        
+        let monthlyTotal = 0;
+        
+        expenses.forEach(expense => {
+          const parts = expense.date.split('/');
+          const expenseMonth = parseInt(parts[1]);
+          const expenseYear = parseInt(parts[2]);
+          
+          if (expenseMonth === currentMonth && expenseYear === currentYear) {
+            monthlyTotal += expense.amount;
+          }
+        });
+        
+        // Check if over budget
+        if (monthlyTotal > budgetLimit) {
+          document.getElementById('budget-limit').textContent = budgetLimit.toLocaleString('es-CL', { style: 'currency', currency: 'CLP' });
+          document.getElementById('current-spend').textContent = monthlyTotal.toLocaleString('es-CL', { style: 'currency', currency: 'CLP' });
+          document.getElementById('budget-alert').classList.remove('hidden');
+        } else {
+          document.getElementById('budget-alert').classList.add('hidden');
+        }
+      }
+      
+      // Logout handler (placeholder)
+      document.getElementById('logout-btn').addEventListener('click', function() {
+        alert("En una aplicación real, esta acción cerraría la sesión del usuario.");
+      });
+      
+      // Initial data load
+      loadExpenses();
+    });
+  </script>
+</body>
+</html>

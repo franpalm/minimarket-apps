@@ -1,0 +1,1 @@
+// SecurityUtils.js - Utilidades de seguridad y cifrado

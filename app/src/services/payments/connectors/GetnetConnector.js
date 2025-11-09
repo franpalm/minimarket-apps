@@ -1,0 +1,1 @@
+// GetnetConnector.js - Conector para terminales Getnet
