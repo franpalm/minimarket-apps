@@ -1,0 +1,1 @@
+// SerialConnector.js - Conector para terminales seriales/USB genéricas

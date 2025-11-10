@@ -1,0 +1,1 @@
+// PaymentValidator.js - Validaciones de pagos y transacciones

@@ -1,0 +1,6 @@
+/* Estilos globales para la aplicación */
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

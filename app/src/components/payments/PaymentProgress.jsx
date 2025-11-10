@@ -1,0 +1,1 @@
+// PaymentProgress.jsx - Barra de progreso durante el pago

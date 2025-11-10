@@ -1,0 +1,1 @@
+// TransactionLogger.js - Sistema de logs de transacciones

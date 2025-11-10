@@ -1,0 +1,1 @@
+// TerminalConfig.jsx - Componente para configurar terminales

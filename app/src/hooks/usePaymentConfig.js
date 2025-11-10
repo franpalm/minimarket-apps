@@ -1,0 +1,1 @@
+// usePaymentConfig.js - Hook para configuración de pagos

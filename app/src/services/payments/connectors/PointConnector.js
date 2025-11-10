@@ -1,0 +1,1 @@
+// PointConnector.js - Conector para Point (Mercado Pago)

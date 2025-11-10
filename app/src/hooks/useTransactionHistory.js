@@ -1,0 +1,1 @@
+// useTransactionHistory.js - Hook para historial de transacciones
