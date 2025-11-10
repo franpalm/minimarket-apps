@@ -1,18 +1,41 @@
-# Ignorar dependencias
+# Dependencias y entornos virtuales
 node_modules/
+app/node_modules/
 venv/
 __pycache__/
 *.pyc
 
-# Ignorar base de datos local
-*.sqlite3
+# Cachés y compilaciones
+app/.cache/
+app/dist/
+app/build/
+*.pack
+*.map
 
-# Ignorar archivos temporales
-.DS_Store
-*.log
+# Binarios y ejecutables
+*.exe
+*.dll
+*.node
+*.dat
+*.so
+*.dylib
 
-# Ignorar configuraciones locales
+# Archivos de configuración local y temporales
 .env
+*.log
 *.swp
+.DS_Store
+Thumbs.db
+desktop.ini
 
+# Bases de datos y sesiones
+*.sqlite3
+*.mdf
+*.suo
+*.vim
+
+# Subproyectos y respaldos
 app_backup/
+electron/
+app/electron/
+minimarket-app/
