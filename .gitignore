@@ -1,6 +1,18 @@
-# Ignorar node_modules y archivos pesados
-electron/node_modules/
-dist/
-.env
+# Ignorar dependencias
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# Ignorar base de datos local
+*.sqlite3
+
+# Ignorar archivos temporales
+.DS_Store
 *.log
 
+# Ignorar configuraciones locales
+.env
+*.swp
+
+app_backup/
