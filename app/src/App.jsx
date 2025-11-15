@@ -7,20 +7,26 @@ import SalesPage from './pages/SalesPage';
 import ReportsPage from './pages/ReportsPage';
 import ExpensesPage from './pages/ExpensesPage';
 import Sidebar from './components/Sidebar';
+import LoginPage from './pages/LoginPage';
 
 function App() {
   const [currentPage, setCurrentPage] = useState('sales');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [modoPrueba, setModoPrueba] = useState(false);
 
   const handleNavigate = (page) => {
     setCurrentPage(page);
   };
+
+  const handleLogin = () => setIsLoggedIn(true);
+  const activarModoPrueba = () => setModoPrueba(true);
 
   const renderPage = () => {
     switch (currentPage) {
       case 'inventory':
         return <InventoryPage />;
       case 'sales':
-        return <SalesPage />;
+        return <SalesPage modoPrueba={modoPrueba} />;
       case 'expenses':
         return <ExpensesPage />;
       case 'reports':
@@ -28,18 +34,22 @@ function App() {
       case 'settings':
         return <div><h1 className="text-xl font-bold">Página de Configuración (Próximamente)</h1></div>;
       default:
-        return <SalesPage />;
+        return <SalesPage modoPrueba={modoPrueba} />;
     }
   };
 
   return (
     <NotificationProvider>
-      <div className="min-h-screen flex bg-gray-100">
-        <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
-        <main className="flex-grow p-4 ml-[250px]">
-          {renderPage()}
-        </main>
-      </div>
+      {!isLoggedIn ? (
+        <LoginPage onLogin={handleLogin} activarModoPrueba={activarModoPrueba} />
+      ) : (
+        <div className="min-h-screen flex bg-gray-100">
+          <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+          <main className="flex-grow p-4 ml-[250px]">
+            {renderPage()}
+          </main>
+        </div>
+      )}
     </NotificationProvider>
   );
 }

@@ -1,3 +1,12 @@
+# --- Endpoint protegido de ejemplo ---
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+class ProtectedExampleView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        return Response({"message": "Acceso autorizado, usuario autenticado."})
 # IMPORTS NECESARIOS PARA DJANGO
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt

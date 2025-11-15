@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import ErrorBoundary from '../components/ErrorBoundary';
 import ProductList from '../components/sales/ProductList';
 import RegistryPanel from '../components/sales/RegistryPanel';
 import PaymentModal from '../components/sales/PaymentModal';
@@ -6,6 +7,8 @@ import ToastContainer from '../components/sales/ToastContainer';
 import Modal from '../components/sales/Modal';
 
 export default function SalesPage() {
+  // Estado para limpiar el carrito después de desmontar el modal
+  const [pendingClearCart, setPendingClearCart] = useState(false);
   const [products, setProducts] = useState([]);
   const [cartItems, setCartItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -15,6 +18,7 @@ export default function SalesPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('Efectivo');
+  const [paymentModalKey, setPaymentModalKey] = useState(0);
 
   const formatPrice = useCallback((price) => {
     return new Intl.NumberFormat('es-CL', {
@@ -96,6 +100,7 @@ export default function SalesPage() {
       showToast('Error', 'No hay productos en el carrito', 'error');
       return;
     }
+    setPaymentModalKey(prev => prev + 1);
     setShowPaymentModal(true);
   }, [cartItems, showToast]);
 
@@ -111,7 +116,8 @@ export default function SalesPage() {
 
   // Función para cerrar el modal de pago
   const handleClosePaymentModal = useCallback(() => {
-    setShowPaymentModal(false);
+  // Solo ocultar el modal al cerrar; NO cambiar la key aquí para evitar remounts/doble desmontaje
+  setShowPaymentModal(false);
   }, []);
 
   // Usar API REST para registrar la venta
@@ -126,7 +132,7 @@ export default function SalesPage() {
 
       // Determinar método de pago utilizado
       const finalPaymentMethod = paymentMethodUsed || paymentMethod;
-      
+
       // Validaciones específicas por método de pago
       if (finalPaymentMethod === 'efectivo') {
         if (!cashReceived || cashReceived < cartTotal) {
@@ -191,15 +197,13 @@ export default function SalesPage() {
         } else if (finalPaymentMethod === 'efectivo') {
           successMessage = `Pago en efectivo completado. Vuelto: $${changeDue?.toLocaleString('es-CL') || 0}`;
         }
-        
+
         showToast('Venta Completada', successMessage, 'success');
-        
-        // Usar setTimeout para diferir las actualizaciones y evitar conflictos de DOM
-        setTimeout(() => {
-          setCartItems([]);
-          handleClosePaymentModal();
-          loadProducts();
-        }, 100);
+        // Estado intermedio: desmontar modal y luego limpiar carrito
+        handleClosePaymentModal();
+        setPendingClearCart(true);
+      } else if (response.ok) {
+        showToast('Venta registrada', 'La venta fue procesada pero no se recibió confirmación completa.', 'warning');
       } else {
         showToast('Error', result?.error || result?.message || 'Error al completar la venta.', 'error');
       }
@@ -209,92 +213,107 @@ export default function SalesPage() {
       setIsProcessingSale(false);
     }
   }, [cartItems, showToast, paymentMethod, loadProducts]);
+  // Efecto para limpiar el carrito y recargar productos después de desmontar el modal
+  useEffect(() => {
+    if (pendingClearCart && !showPaymentModal) {
+      const timer = setTimeout(() => {
+        setCartItems([]);
+        loadProducts();
+        setPendingClearCart(false);
+      }, 300); // Delay to allow modal to unmount gracefully
+      return () => clearTimeout(timer);
+    }
+  }, [pendingClearCart, showPaymentModal, loadProducts]);
+    // Calcular totales
+    const cartTotal = cartItems.reduce((sum, item) => sum + item.precio_venta * item.quantity, 0);
+    const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
-  const cartTotal = cartItems.reduce((sum, item) => sum + item.precio_venta * item.quantity, 0);
-  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-
-  return (
-    <>
-      <header className="w-full bg-white shadow mb-6">
-        <div className="max-w-7xl mx-auto flex justify-between items-center h-20 px-4">
-          <div className="flex items-center">
-            <img
-              src="/logo192.png"
-              alt="MiniMarket Pro Logo"
-              className="w-12 h-12 object-contain"
-            />
-            <span className="ml-3 font-bold text-2xl text-gray-700">MiniMarket Pro</span>
-          </div>
-          <h1 className="text-lg font-bold text-gray-600">POS Ventas</h1>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex flex-col md:flex-row gap-6">
-          <div className="w-full md:w-2/3">
-            <ProductList
-              products={products.filter(p =>
-                p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                p.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase())
-              )}
-              isLoading={isLoading}
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              addToCart={addToCart}
-              formatPrice={formatPrice}
-            />
-            {!isLoading && products.length === 0 && (
-              <div className="bg-yellow-100 text-yellow-800 rounded px-4 py-3 mt-4">
-                No hay productos disponibles para la venta.<br />
-                <b>Revisa la consola del backend para ver el log de productos.</b>
+    // Renderizado principal con ErrorBoundary
+    return (
+      <ErrorBoundary>
+        <>
+          <header className="w-full bg-white shadow mb-6">
+            <div className="max-w-7xl mx-auto flex justify-between items-center h-20 px-4">
+              <div className="flex items-center">
+                <img
+                  src="/logo192.png"
+                  alt="MiniMarket Pro Logo"
+                  className="w-12 h-12 object-contain"
+                />
+                <span className="ml-3 font-bold text-2xl text-gray-700">MiniMarket Pro</span>
               </div>
-            )}
+              <h1 className="text-lg font-bold text-gray-600">POS Ventas</h1>
+            </div>
+          </header>
+
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="flex flex-col md:flex-row gap-6">
+              <div className="w-full md:w-2/3">
+                <ProductList
+                  products={products.filter(p =>
+                    p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    p.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase())
+                  )}
+                  isLoading={isLoading}
+                  searchTerm={searchTerm}
+                  setSearchTerm={setSearchTerm}
+                  addToCart={addToCart}
+                  formatPrice={formatPrice}
+                />
+                {!isLoading && products.length === 0 && (
+                  <div className="bg-yellow-100 text-yellow-800 rounded px-4 py-3 mt-4">
+                    No hay productos disponibles para la venta.<br />
+                    <b>Revisa la consola del backend para ver el log de productos.</b>
+                  </div>
+                )}
+              </div>
+              <div className="w-full md:w-1/3">
+                <RegistryPanel
+                  cartItems={cartItems}
+                  products={products}
+                  formatPrice={formatPrice}
+                  updateQuantity={updateQuantity}
+                  removeFromCart={removeFromCart}
+                  cartTotal={cartTotal}
+                  cartCount={cartCount}
+                  isProcessingSale={isProcessingSale}
+                  handleOpenPaymentModal={handleOpenPaymentModal}
+                  handleCancelSale={handleCancelSale}
+                  paymentMethod={paymentMethod}
+                  setPaymentMethod={setPaymentMethod}
+                />
+              </div>
+            </div>
           </div>
-          <div className="w-full md:w-1/3">
-            <RegistryPanel
-              cartItems={cartItems}
-              products={products}
-              formatPrice={formatPrice}
-              updateQuantity={updateQuantity}
-              removeFromCart={removeFromCart}
-              cartTotal={cartTotal}
-              cartCount={cartCount}
-              isProcessingSale={isProcessingSale}
-              handleOpenPaymentModal={handleOpenPaymentModal}
-              handleCancelSale={handleCancelSale}
-              paymentMethod={paymentMethod}
-              setPaymentMethod={setPaymentMethod}
+
+          <ToastContainer toasts={toasts} setToasts={setToasts} />
+
+          {/* Solo un modal puede estar abierto a la vez */}
+          {showCancelModal && !showPaymentModal && (
+            <Modal
+              key="cancel-modal"
+              show={true}
+              title="Cancelar Venta"
+              message="¿Está seguro que desea cancelar la venta y vaciar el carrito?"
+              onConfirm={confirmCancelSale}
+              onCancel={() => setShowCancelModal(false)}
             />
-          </div>
-        </div>
-      </div>
-
-      <ToastContainer toasts={toasts} setToasts={setToasts} />
-
-      {/* Solo un modal puede estar abierto a la vez */}
-      {showCancelModal && !showPaymentModal && (
-        <Modal
-          key="cancel-modal"
-          show={true}
-          title="Cancelar Venta"
-          message="¿Está seguro que desea cancelar la venta y vaciar el carrito?"
-          onConfirm={confirmCancelSale}
-          onCancel={() => setShowCancelModal(false)}
-        />
-      )}
-      {showPaymentModal && !showCancelModal && (
-        <PaymentModal
-          key="payment-modal"
-          show={true}
-          cartTotal={cartTotal}
-          onConfirm={handleConfirmPayment}
-          onCancel={handleClosePaymentModal}
-          showToast={showToast}
-          isProcessingSale={isProcessingSale}
-          paymentMethod={paymentMethod}
-        />
-      )}
-    </>
-  );
+          )}
+          {showPaymentModal && !showCancelModal && (
+            <PaymentModal
+              key={paymentModalKey}
+              show={true}
+              cartTotal={cartTotal}
+              onConfirm={handleConfirmPayment}
+              onCancel={handleClosePaymentModal}
+              showToast={showToast}
+              isProcessingSale={isProcessingSale}
+              paymentMethod={paymentMethod}
+            />
+          )}
+        </>
+      </ErrorBoundary>
+    );
 }
+
 

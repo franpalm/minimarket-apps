@@ -62,14 +62,19 @@ export const usePaymentTerminal = (config = {}) => {
     // Cleanup al desmontar
     return () => {
       mountedRef.current = false; // Marcar como desmontado
-      if (paymentServiceRef.current) {
-        paymentServiceRef.current.destroy();
-        paymentServiceRef.current = null;
-      }
-      if (statusPollingRef.current) {
-        clearInterval(statusPollingRef.current);
-        statusPollingRef.current = null;
-      }
+      
+      const cleanup = async () => {
+        if (paymentServiceRef.current) {
+          await paymentServiceRef.current.destroy();
+          paymentServiceRef.current = null;
+        }
+        if (statusPollingRef.current) {
+          clearInterval(statusPollingRef.current);
+          statusPollingRef.current = null;
+        }
+      };
+      
+      cleanup();
     };
   }, []);
 

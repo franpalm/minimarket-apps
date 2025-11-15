@@ -311,9 +311,9 @@ class PaymentService {
   /**
    * Limpia recursos al destruir la instancia
    */
-  destroy() {
+  async destroy() {
     this._stopHealthCheck();
-    this.disconnect();
+    await this.disconnect();
     this.availableTerminals.clear();
     this.transactionHistory = [];
   }

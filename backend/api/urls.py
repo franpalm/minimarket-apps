@@ -2,6 +2,10 @@
 # URLs para la API
 from django.urls import path
 from . import views
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
 urlpatterns = [
     # URLs pedidos por el profesor 
@@ -38,4 +42,11 @@ urlpatterns = [
     path('reportes/mensual/', views.reporte_mensual, name='reporte_mensual'),
     path('reportes/semanal/', views.reporte_semanal, name='reporte_semanal'),
     path('reportes/diario/', views.reporte_diario, name='reporte_diario'),
+
+    # JWT Auth endpoints
+    path('login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+    # Ejemplo de endpoint protegido
+    path('protected/', views.ProtectedExampleView.as_view(), name='protected_example'),
 ]

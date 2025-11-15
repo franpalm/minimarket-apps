@@ -1,6 +1,6 @@
 
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 const Toast = ({ toast, onStartClose }) => {
   useEffect(() => {
@@ -45,14 +45,32 @@ const Toast = ({ toast, onStartClose }) => {
 };
 
 const ToastContainer = ({ toasts, setToasts }) => {
+  const timeoutRefs = useRef({});
+
+  // Efecto para limpiar todos los timeouts al desmontar el contenedor
+  useEffect(() => {
+    return () => {
+      for (const id in timeoutRefs.current) {
+        clearTimeout(timeoutRefs.current[id]);
+      }
+    };
+  }, []);
+
   // Marca el toast como cerrando, y lo elimina tras la animación
   const startClose = (id) => {
+    // Evitar doble cierre
+    const isAlreadyClosing = toasts.find(t => t.id === id)?.closing;
+    if (isAlreadyClosing) return;
+
     setToasts((prev) =>
       prev.map((t) => (t.id === id ? { ...t, closing: true } : t))
     );
-    setTimeout(() => {
+
+    // Guardar y manejar el timeout para la eliminación final
+    timeoutRefs.current[id] = setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 300); // 300ms coincide con duration-300
+      delete timeoutRefs.current[id]; // Limpiar la referencia
+    }, 300); // Coincide con la duración de la animación de opacidad
   };
 
   return (
