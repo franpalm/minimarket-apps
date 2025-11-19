@@ -40,7 +40,52 @@ const ReportFilters = ({ activeTab, filters, onChange, onApply }) => {
           />
         </div>
       )}
-  {/* El input de mes para el tab mensual ha sido eliminado. El selector de mes solo está en InformeMensual. */}
+      {/* Filtros avanzados para todos los tabs excepto daily */}
+      {activeTab !== 'daily' && (
+        <>
+          <div className="w-full md:w-auto">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Método de Pago</label>
+            <select
+              className="border rounded py-1 px-2 text-sm w-full"
+              name="payment"
+              value={filters.payment}
+              onChange={onChange}
+            >
+              <option value="">Todos</option>
+              <option value="Efectivo">Efectivo</option>
+              <option value="Transferencia">Transferencia</option>
+              <option value="terminal">Terminal</option>
+              <option value="Tarjeta">Tarjeta</option>
+            </select>
+          </div>
+          <div className="w-full md:w-auto">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Usuario/Cajero</label>
+            <input
+              type="text"
+              className="border rounded py-1 px-2 text-sm"
+              name="usuario"
+              value={filters.usuario || ''}
+              onChange={onChange}
+              placeholder="ID o nombre de usuario"
+            />
+          </div>
+          <div className="w-full md:w-auto">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Estado Terminal</label>
+            <select
+              className="border rounded py-1 px-2 text-sm w-full"
+              name="terminal_status"
+              value={filters.terminal_status || ''}
+              onChange={onChange}
+            >
+              <option value="">Todos</option>
+              <option value="approved">Aprobado</option>
+              <option value="rejected">Rechazado</option>
+              <option value="pending">Pendiente</option>
+            </select>
+          </div>
+        </>
+      )}
+      {/* Filtros específicos para products tab */}
       {activeTab === 'products' && (
         <>
           <div className="w-full md:w-auto">

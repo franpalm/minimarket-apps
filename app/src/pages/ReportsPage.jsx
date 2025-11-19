@@ -91,17 +91,26 @@ function ReportsPage() {
       setLoading(true);
       try {
         let url = '';
+        let params = [];
         if (activeTab === 'daily') {
-          url = `http://localhost:8000/api/reportes/diario/?dateFrom=${appliedFilters.dateFrom}&dateTo=${appliedFilters.dateTo}`;
+          params.push(`dateFrom=${appliedFilters.dateFrom}`);
+          params.push(`dateTo=${appliedFilters.dateTo}`);
+          if (appliedFilters.payment) params.push(`payment=${appliedFilters.payment}`);
+          if (appliedFilters.usuario) params.push(`usuario=${appliedFilters.usuario}`);
+          if (appliedFilters.terminal_status) params.push(`terminal_status=${appliedFilters.terminal_status}`);
+          url = `http://localhost:8000/api/reportes/diario/?${params.join('&')}`;
         } else if (activeTab === 'weekly') {
           if (!appliedFilters.week) {
             setReportData(null);
             setLoading(false);
             return;
           }
-          url = `http://localhost:8000/api/reportes/semanal/?week=${appliedFilters.week}`;
+          params.push(`week=${appliedFilters.week}`);
+          if (appliedFilters.payment) params.push(`payment=${appliedFilters.payment}`);
+          if (appliedFilters.usuario) params.push(`usuario=${appliedFilters.usuario}`);
+          if (appliedFilters.terminal_status) params.push(`terminal_status=${appliedFilters.terminal_status}`);
+          url = `http://localhost:8000/api/reportes/semanal/?${params.join('&')}`;
         } else if (activeTab === 'monthly') {
-          // Usa el mes y año actual si no hay filtro
           let month = appliedFilters.month;
           let year = appliedFilters.year;
           if (!month) {
@@ -109,12 +118,18 @@ function ReportsPage() {
             month = now.getMonth() + 1;
             year = now.getFullYear();
           }
-          url = `http://localhost:8000/api/reportes/mensual/?month=${Number(month)}&year=${Number(year)}`;
+          params.push(`month=${Number(month)}`);
+          params.push(`year=${Number(year)}`);
+          if (appliedFilters.payment) params.push(`payment=${appliedFilters.payment}`);
+          if (appliedFilters.usuario) params.push(`usuario=${appliedFilters.usuario}`);
+          if (appliedFilters.terminal_status) params.push(`terminal_status=${appliedFilters.terminal_status}`);
+          url = `http://localhost:8000/api/reportes/mensual/?${params.join('&')}`;
         } else if (activeTab === 'products') {
-          // Llama al endpoint de análisis de productos con los filtros de fecha
-          const params = [];
           if (appliedFilters.dateFrom) params.push(`dateFrom=${appliedFilters.dateFrom}`);
           if (appliedFilters.dateTo) params.push(`dateTo=${appliedFilters.dateTo}`);
+          if (appliedFilters.payment) params.push(`payment=${appliedFilters.payment}`);
+          if (appliedFilters.usuario) params.push(`usuario=${appliedFilters.usuario}`);
+          if (appliedFilters.terminal_status) params.push(`terminal_status=${appliedFilters.terminal_status}`);
           url = `http://localhost:8000/api/analisis-productos/${params.length ? '?' + params.join('&') : ''}`;
         } else {
           setReportData(null);

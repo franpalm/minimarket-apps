@@ -54,6 +54,8 @@ class Venta(models.Model):
     metodo_pago = models.CharField(max_length=30)
     usuario = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True)
     creado_en = models.DateTimeField(auto_now_add=True)
+    terminal_transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    terminal_response = models.JSONField(blank=True, null=True)
 
     def __str__(self):
         return f"Venta {self.id} - {self.total_venta}"

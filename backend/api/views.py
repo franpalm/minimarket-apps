@@ -1,6 +1,116 @@
-# --- Endpoint protegido de ejemplo ---
+# [INICIO] Código de Mercado Pago
+# ========================================
+# Imports para las nuevas vistas de Mercado Pago
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny # Usamos AllowAny para estos endpoints
+from rest_framework.response import Response
+from rest_framework import status
+import mercadopago
+from django.conf import settings # Para leer el token desde settings.py
+
+@api_view(['POST'])
+@permission_classes([AllowAny]) # O usa [IsAuthenticated] si prefieres
+def create_payment_intent(request):
+    """
+    Crea un intento de pago en la terminal Point Smart.
+    Recibe: { "amount": 1500, "deviceId": "YOUR_DEVICE_ID" }
+    """
+    try:
+        # 1. Obtener datos del request
+        amount = request.data.get("amount")
+        device_id = request.data.get("deviceId")
+
+        if not amount or not device_id:
+            return Response({"error": "Faltan datos: amount y deviceId"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 2. Configurar el SDK de Mercado Pago
+        sdk = mercadopago.SDK(settings.MP_ACCESS_TOKEN)
+
+        # 3. Datos para el intento de pago
+        payment_intent = {
+            "amount": float(amount),
+            "description": "Cobro desde App Django",
+            "payment_mode": "card_present",
+            "device_id": device_id,
+        }
+        
+        # 4. Crear el intento de pago en la API de MP
+        result = sdk.point().create_payment_intent(payment_intent)
+
+        if "status_code" in result and result["status_code"] >= 400:
+             print(f"[Backend] Error MP: {result['response']}")
+             return Response({"error": result["response"]["message"]}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 5. Devolver el ID del intento a React
+        intent_id = result["response"]["id"]
+        return Response({"intentId": intent_id}, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        print(f"[Backend] Error interno: {str(e)}")
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny]) # O usa [IsAuthenticated] si prefieres
+def check_payment_status(request, intent_id):
+    """
+    Consulta el estado de un intento de pago.
+    Recibe el intent_id en la URL.
+    """
+    try:
+        # 1. Configurar el SDK
+        sdk = mercadopago.SDK(settings.MP_ACCESS_TOKEN)
+
+        # 2. Consultar el estado del intento
+        result = sdk.point().get_payment_intent(intent_id)
+
+        if "status_code" in result and result["status_code"] >= 400:
+             return Response({"error": result["response"]["message"]}, status=status.HTTP_404_NOT_FOUND)
+
+        # 3. Devolver el estado a React
+        response_data = result["response"]
+        status_str = response_data.get("status") # Ej: 'approved', 'rejected', 'pending'
+        
+        return Response({
+            "status": status_str,
+            "paymentData": response_data if status_str == "approved" else None
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"[Backend] Error interno consulta: {str(e)}")
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# --- Endpoint para iniciar pagos con terminal ---
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework import status
+
+# Simulación de SDK (reemplaza por el real)
+class TerminalSDK:
+    def connect(self):
+        # Lógica real de conexión
+        return True
+    def pay(self, amount):
+        # Lógica real de pago
+        # Simula respuesta del terminal
+        return {"success": True, "message": "Pago aprobado"}
+    def disconnect(self):
+        # Lógica real de desconexión
+        return True
+
+class TerminalPaymentView(APIView):
+    def post(self, request):
+        amount = request.data.get("amount")
+        if not amount:
+            return Response({"error": "Falta el monto"}, status=status.HTTP_400_BAD_REQUEST)
+        sdk = TerminalSDK()
+        if not sdk.connect():
+            return Response({"error": "No se pudo conectar al terminal"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        result = sdk.pay(amount)
+        sdk.disconnect()
+        return Response(result, status=status.HTTP_200_OK if result["success"] else status.HTTP_402_PAYMENT_REQUIRED)
+
+# --- Endpoint protegido de ejemplo ---
 from rest_framework.permissions import IsAuthenticated
 
 class ProtectedExampleView(APIView):
@@ -14,27 +124,30 @@ from django.db.models import Sum, F, Max, Avg, Count
 # --- Análisis de Productos ---
 @csrf_exempt
 def analisis_productos(request):
-    if request.method != 'GET':
-        return HttpResponseNotAllowed(['GET'])
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
     try:
-        month = request.GET.get('month')
-        year = request.GET.get('year')
-        date_from = request.GET.get('dateFrom')
-        date_to = request.GET.get('dateTo')
-        from datetime import datetime
-        from .models import Producto, DetalleVenta, Categoria
-        if date_from and date_to:
-            from_date = date_from
-            to_date = date_to
-        else:
-            now = datetime.now()
-            month = int(month) if month else now.month
-            year = int(year) if year else now.year
-            from_date = f"{year}-{str(month).zfill(2)}-01"
-            if month == 12:
-                to_date = f"{year+1}-01-01"
-            else:
-                to_date = f"{year}-{str(month+1).zfill(2)}-01"
+        data = json.loads(request.body)
+        usuario_id = data.get('usuario_id')
+        detalles = data.get('detalles')
+        total_venta = data.get('total_venta')
+        metodo_pago = data.get('metodo_pago')
+        fecha_venta = data.get('fecha_venta')
+        terminal_transaction_id = data.get('terminal_transaction_id')
+        terminal_response = data.get('terminal_response')
+        # ...existing code...
+        venta = Venta.objects.create(
+            fecha_venta=fecha_venta,
+            total_venta=total_venta,
+            metodo_pago=metodo_pago,
+            usuario_id=usuario_id,
+            terminal_transaction_id=terminal_transaction_id if metodo_pago == 'terminal' else None,
+            terminal_response=terminal_response if metodo_pago == 'terminal' else None
+        )
+        # ...existing code...
+        return JsonResponse({'venta_id': venta.id}, status=201)
+    except Exception as e:
+        return HttpResponseBadRequest(str(e))
 
         # 1. Obtener todos los productos con stock, costo y precio
         productos = Producto.objects.select_related('categoria').all()
@@ -112,6 +225,7 @@ def reporte_diario(request):
         category = request.GET.get('category')
         top_n = int(request.GET.get('topN', 5))
         payment = request.GET.get('payment')
+        usuario_id = request.GET.get('usuario')
         from datetime import datetime
         if not from_date:
             from_date = datetime.now().date()
@@ -120,7 +234,9 @@ def reporte_diario(request):
 
         ventas = Venta.objects.filter(fecha_venta__date__gte=from_date, fecha_venta__date__lte=to_date)
         if payment:
-            ventas = ventas.filter(metodo_pago__iexact=('Efectivo' if payment == 'cash' else 'Transferencia'))
+            ventas = ventas.filter(metodo_pago__iexact=payment)
+        if usuario_id:
+            ventas = ventas.filter(usuario_id=usuario_id)
 
         total_sales = ventas.aggregate(total=Sum('total_venta'))['total'] or 0
         sales_count = ventas.count()
@@ -154,13 +270,15 @@ def reporte_diario(request):
         )
         breakdown_by_payment = {row['metodo_pago'].lower(): {'cantidad': row['cantidad'], 'total': float(row['total'])} for row in breakdown}
 
+        ventas_list = list(ventas.values('id', 'fecha_venta', 'total_venta', 'metodo_pago', 'usuario_id', 'terminal_transaction_id', 'terminal_response'))
         return JsonResponse({
             'totalSales': float(total_sales),
             'salesCount': sales_count,
             'avgTicket': float(avg_ticket),
             'salesByHour': sales_by_hour,
             'topProducts': top_products,
-            'breakdownByPayment': breakdown_by_payment
+            'breakdownByPayment': breakdown_by_payment,
+            'ventas': ventas_list
         })
     except Exception as e:
         return HttpResponseBadRequest(str(e))
@@ -186,7 +304,13 @@ def reporte_semanal(request):
         from_date = days[0]
         to_date = days[6]
 
+        payment = request.GET.get('payment')
+        usuario_id = request.GET.get('usuario')
         ventas = Venta.objects.filter(fecha_venta__date__gte=from_date, fecha_venta__date__lte=to_date)
+        if payment:
+            ventas = ventas.filter(metodo_pago__iexact=payment)
+        if usuario_id:
+            ventas = ventas.filter(usuario_id=usuario_id)
         total_sales = ventas.aggregate(total=Sum('total_venta'))['total'] or 0
         sales_count = ventas.count()
         avg_ticket = ventas.aggregate(avg=Avg('total_venta'))['avg'] or 0
@@ -218,13 +342,15 @@ def reporte_semanal(request):
         )
         breakdown_by_payment = {row['metodo_pago'].lower(): {'cantidad': row['cantidad'], 'total': float(row['total'])} for row in breakdown}
 
+        ventas_list = list(ventas.values('id', 'fecha_venta', 'total_venta', 'metodo_pago', 'usuario_id', 'terminal_transaction_id', 'terminal_response'))
         return JsonResponse({
             'totalSales': float(total_sales),
             'salesCount': sales_count,
             'avgTicket': float(avg_ticket),
             'salesByDay': sales_by_day,
             'topProducts': top_products,
-            'breakdownByPayment': breakdown_by_payment
+            'breakdownByPayment': breakdown_by_payment,
+            'ventas': ventas_list
         })
     except Exception as e:
         return HttpResponseBadRequest(str(e))
@@ -246,7 +372,13 @@ def reporte_mensual(request):
         else:
             to_date = datetime(year, month + 1, 1) - timedelta(days=1)
 
+        payment = request.GET.get('payment')
+        usuario_id = request.GET.get('usuario')
         ventas = Venta.objects.filter(fecha_venta__date__gte=from_date, fecha_venta__date__lte=to_date)
+        if payment:
+            ventas = ventas.filter(metodo_pago__iexact=payment)
+        if usuario_id:
+            ventas = ventas.filter(usuario_id=usuario_id)
         total_sales = ventas.aggregate(total=Sum('total_venta'))['total'] or 0
         sales_count = ventas.count()
         avg_ticket = ventas.aggregate(avg=Avg('total_venta'))['avg'] or 0
@@ -276,13 +408,15 @@ def reporte_mensual(request):
         )
         breakdown_by_payment = {row['metodo_pago'].lower(): {'cantidad': row['cantidad'], 'total': float(row['total'])} for row in breakdown}
 
+        ventas_list = list(ventas.values('id', 'fecha_venta', 'total_venta', 'metodo_pago', 'usuario_id', 'terminal_transaction_id', 'terminal_response'))
         return JsonResponse({
             'totalSales': float(total_sales),
             'salesCount': sales_count,
             'avgTicket': float(avg_ticket),
             'salesByDay': sales_by_day,
             'topProducts': top_products,
-            'breakdownByPayment': breakdown_by_payment
+            'breakdownByPayment': breakdown_by_payment,
+            'ventas': ventas_list
         })
     except Exception as e:
         return HttpResponseBadRequest(str(e))

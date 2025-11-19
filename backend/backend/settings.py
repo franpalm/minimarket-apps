@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework.authtoken',
+    'rest_framework_simplejwt',
 ]
 
 # Usar el modelo de usuario personalizado
@@ -147,3 +148,6 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+
+MP_ACCESS_TOKEN ='APP_USR-3685798887305018-111523-002c3fb50f3cf6aa384ddba670baee5c-793421487'

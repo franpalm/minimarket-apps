@@ -4,6 +4,32 @@ import SalesByHourChart from '../SalesByHourChart';
 import SalesBreakdownModal from '../SalesBreakdownModal';
 
 const PulsoDelDia = ({ reportData, formatCLP }) => {
+    // Exportar ventas a CSV (incluye efectivo, terminal, etc.)
+    const handleDownload = () => {
+      if (!reportData || !reportData.ventas) return;
+      const ventas = reportData.ventas;
+      const headers = [
+        'ID', 'Fecha', 'Total', 'Método de Pago', 'Usuario', 'Terminal Transaction ID', 'Terminal Response'
+      ];
+      const rows = ventas.map(v => [
+        v.id,
+        v.fecha_venta,
+        v.total_venta,
+        v.metodo_pago,
+        v.usuario_id,
+        v.terminal_transaction_id || '',
+        v.terminal_response || ''
+      ]);
+      let csvContent = headers.join(',') + '\n';
+      csvContent += rows.map(r => r.map(x => `"${x}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute('download', 'reporte_ventas_dia.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
   const [modalOpen, setModalOpen] = useState(false);
 
   // Usa breakdown real si viene del backend, si no, simula
@@ -73,7 +99,7 @@ const PulsoDelDia = ({ reportData, formatCLP }) => {
         </div>
       </div>
       <div className="mt-6 text-right">
-        <button className="py-2 px-4 border border-indigo-600 text-indigo-600 rounded hover:bg-indigo-50 transition flex items-center gap-2">
+        <button className="py-2 px-4 border border-indigo-600 text-indigo-600 rounded hover:bg-indigo-50 transition flex items-center gap-2" onClick={handleDownload}>
           <i className="bi bi-download"></i> Descargar Reporte
         </button>
       </div>

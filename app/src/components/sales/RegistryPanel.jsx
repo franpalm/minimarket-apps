@@ -21,40 +21,42 @@ export default function RegistryPanel({
         {cartItems.length === 0 ? (
           <div className="text-center text-gray-400 py-3">No hay productos registrados</div>
         ) : (
-          cartItems.map(item => (
-            <div key={item.id} className="flex justify-between items-center py-3 border-b border-dashed border-gray-200 last:border-b-0">
-              <div className="flex-1">
-                <div className="font-bold">{item.nombre}</div>
-                <span>{formatPrice(item.precio_venta)} x {item.quantity}</span>
-                <div className="mt-1 font-semibold">{formatPrice(item.precio_venta * item.quantity)}</div>
+          <React.Fragment>
+            {cartItems.map(item => (
+              <div key={item.id} className="flex justify-between items-center py-3 border-b border-dashed border-gray-200 last:border-b-0 fade-out">
+                <div className="flex-1">
+                  <div className="font-bold">{item.nombre}</div>
+                  <span>{formatPrice(item.precio_venta)} x {item.quantity}</span>
+                  <div className="mt-1 font-semibold">{formatPrice(item.precio_venta * item.quantity)}</div>
+                </div>
+                <div className="flex gap-2 ml-4">
+                  <button
+                    className="border border-gray-300 rounded px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                    onClick={() => updateQuantity(item.id, -1)}
+                    disabled={item.quantity <= 1}
+                    title="Quitar uno"
+                  >
+                    <i className="bi bi-dash"></i>
+                  </button>
+                  <button
+                    className="border border-gray-300 rounded px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                    onClick={() => updateQuantity(item.id, 1)}
+                    disabled={item.quantity >= (products.find(p => p.id === item.id)?.stock_actual || Infinity)}
+                    title="Agregar uno"
+                  >
+                    <i className="bi bi-plus"></i>
+                  </button>
+                  <button
+                    className="border border-red-400 text-red-600 rounded px-2 py-1 hover:bg-red-50"
+                    onClick={() => removeFromCart(item.id)}
+                    title="Eliminar"
+                  >
+                    <i className="bi bi-trash"></i>
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-2 ml-4">
-                <button
-                  className="border border-gray-300 rounded px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-                  onClick={() => updateQuantity(item.id, -1)}
-                  disabled={item.quantity <= 1}
-                  title="Quitar uno"
-                >
-                  <i className="bi bi-dash"></i>
-                </button>
-                <button
-                  className="border border-gray-300 rounded px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-                  onClick={() => updateQuantity(item.id, 1)}
-                  disabled={item.quantity >= (products.find(p => p.id === item.id)?.stock_actual || Infinity)}
-                  title="Agregar uno"
-                >
-                  <i className="bi bi-plus"></i>
-                </button>
-                <button
-                  className="border border-red-400 text-red-600 rounded px-2 py-1 hover:bg-red-50"
-                  onClick={() => removeFromCart(item.id)}
-                  title="Eliminar"
-                >
-                  <i className="bi bi-trash"></i>
-                </button>
-              </div>
-            </div>
-          ))
+            ))}
+          </React.Fragment>
         )}
       </div>
       <div className="shadow rounded-lg p-4 bg-gray-50">

@@ -13,14 +13,15 @@ const LoginPage = ({ onLogin, activarModoPrueba }) => {
     if (email && password) {
       setLoading(true);
       try {
-        const response = await fetch('http://localhost:8000/api/login/', {
+        const response = await fetch('http://localhost:8000/api/token/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: email, password })
         });
         const data = await response.json();
         if (response.ok && data.access) {
-          localStorage.setItem('token', data.access);
+          sessionStorage.setItem('access_token', data.access);
+          sessionStorage.setItem('refresh_token', data.refresh);
           onLogin();
         } else {
           setError(data.detail || 'Credenciales incorrectas');

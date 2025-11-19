@@ -42,6 +42,10 @@ urlpatterns = [
     path('reportes/mensual/', views.reporte_mensual, name='reporte_mensual'),
     path('reportes/semanal/', views.reporte_semanal, name='reporte_semanal'),
     path('reportes/diario/', views.reporte_diario, name='reporte_diario'),
+    path('terminal-payment/', views.TerminalPaymentView.as_view(), name='terminal-payment'),
+    # Endpoints Mercado Pago
+    path('mp/create-intent/', views.create_payment_intent, name='create_payment_intent'),
+    path('mp/check-intent/<str:intent_id>/', views.check_payment_status, name='check_payment_status'),
 
     # JWT Auth endpoints
     path('login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

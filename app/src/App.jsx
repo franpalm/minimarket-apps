@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ErrorBoundary from './components/ErrorBoundary';
 import { NotificationProvider } from './components/Notification';
 import './App.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
@@ -39,18 +40,20 @@ function App() {
   };
 
   return (
-    <NotificationProvider>
-      {!isLoggedIn ? (
-        <LoginPage onLogin={handleLogin} activarModoPrueba={activarModoPrueba} />
-      ) : (
-        <div className="min-h-screen flex bg-gray-100">
-          <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
-          <main className="flex-grow p-4 ml-[250px]">
-            {renderPage()}
-          </main>
-        </div>
-      )}
-    </NotificationProvider>
+    <ErrorBoundary>
+      <NotificationProvider>
+        {!isLoggedIn ? (
+          <LoginPage onLogin={handleLogin} activarModoPrueba={activarModoPrueba} />
+        ) : (
+          <div className="min-h-screen flex bg-gray-100">
+            <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+            <main className="flex-grow p-4 ml-[250px]">
+              {renderPage()}
+            </main>
+          </div>
+        )}
+      </NotificationProvider>
+    </ErrorBoundary>
   );
 }
 

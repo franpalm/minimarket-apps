@@ -4,6 +4,32 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 const daysOfWeek = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 const InformeSemanal = ({ reportData, formatCLP }) => {
+    // Exportar ventas a CSV (incluye efectivo, terminal, etc.)
+    const handleDownload = () => {
+      if (!reportData || !reportData.ventas) return;
+      const ventas = reportData.ventas;
+      const headers = [
+        'ID', 'Fecha', 'Total', 'Método de Pago', 'Usuario', 'Terminal Transaction ID', 'Terminal Response'
+      ];
+      const rows = ventas.map(v => [
+        v.id,
+        v.fecha_venta,
+        v.total_venta,
+        v.metodo_pago,
+        v.usuario_id,
+        v.terminal_transaction_id || '',
+        v.terminal_response || ''
+      ]);
+      let csvContent = headers.join(',') + '\n';
+      csvContent += rows.map(r => r.map(x => `"${x}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute('download', 'reporte_ventas_semanal.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
   if (!reportData || Object.keys(reportData).length === 0 || reportData.error) {
     return (
       <div className="text-gray-400 py-12 text-center">
@@ -20,6 +46,11 @@ const InformeSemanal = ({ reportData, formatCLP }) => {
 
   return (
     <div className="space-y-8">
+      <div className="mt-6 text-right">
+        <button className="py-2 px-4 border border-indigo-600 text-indigo-600 rounded hover:bg-indigo-50 transition flex items-center gap-2" onClick={handleDownload}>
+          <i className="bi bi-download"></i> Descargar Reporte
+        </button>
+      </div>
       {/* Resumen visual amigable */}
       <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-2 text-center">
         <span className="text-lg md:text-xl font-semibold text-indigo-800">

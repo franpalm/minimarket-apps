@@ -9,6 +9,32 @@ const months = [
 const COLORS = ['#6366f1', '#10b981', '#f59e42', '#ef4444', '#a855f7', '#fbbf24', '#3b82f6'];
 
 const InformeMensual = ({ reportData, formatCLP, onMonthChange, monthComparison, month, year }) => {
+    // Exportar ventas a CSV (incluye efectivo, terminal, etc.)
+    const handleDownload = () => {
+      if (!data || !data.ventas) return;
+      const ventas = data.ventas;
+      const headers = [
+        'ID', 'Fecha', 'Total', 'Método de Pago', 'Usuario', 'Terminal Transaction ID', 'Terminal Response'
+      ];
+      const rows = ventas.map(v => [
+        v.id,
+        v.fecha_venta,
+        v.total_venta,
+        v.metodo_pago,
+        v.usuario_id,
+        v.terminal_transaction_id || '',
+        v.terminal_response || ''
+      ]);
+      let csvContent = headers.join(',') + '\n';
+      csvContent += rows.map(r => r.map(x => `"${x}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute('download', 'reporte_ventas_mensual.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
   // El mes seleccionado viene de props (1-based)
   const selectedMonth = typeof month === 'number' && month > 0 ? month - 1 : new Date().getMonth();
 
@@ -68,6 +94,11 @@ const InformeMensual = ({ reportData, formatCLP, onMonthChange, monthComparison,
 
   return (
     <div className="space-y-8">
+      <div className="mt-6 text-right">
+        <button className="py-2 px-4 border border-indigo-600 text-indigo-600 rounded hover:bg-indigo-50 transition flex items-center gap-2" onClick={handleDownload}>
+          <i className="bi bi-download"></i> Descargar Reporte
+        </button>
+      </div>
       {/* Selector de mes y descripción */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-2">
         <div>

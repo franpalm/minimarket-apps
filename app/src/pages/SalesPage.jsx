@@ -230,8 +230,8 @@ export default function SalesPage() {
 
     // Renderizado principal con ErrorBoundary
     return (
-      <ErrorBoundary>
-        <>
+      <>
+        <ErrorBoundary>
           <header className="w-full bg-white shadow mb-6">
             <div className="max-w-7xl mx-auto flex justify-between items-center h-20 px-4">
               <div className="flex items-center">
@@ -249,17 +249,19 @@ export default function SalesPage() {
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex flex-col md:flex-row gap-6">
               <div className="w-full md:w-2/3">
-                <ProductList
-                  products={products.filter(p =>
-                    p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    p.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase())
-                  )}
-                  isLoading={isLoading}
-                  searchTerm={searchTerm}
-                  setSearchTerm={setSearchTerm}
-                  addToCart={addToCart}
-                  formatPrice={formatPrice}
-                />
+                <ErrorBoundary>
+                  <ProductList
+                    products={products.filter(p =>
+                      p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      p.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase())
+                    )}
+                    isLoading={isLoading}
+                    searchTerm={searchTerm}
+                    setSearchTerm={setSearchTerm}
+                    addToCart={addToCart}
+                    formatPrice={formatPrice}
+                  />
+                </ErrorBoundary>
                 {!isLoading && products.length === 0 && (
                   <div className="bg-yellow-100 text-yellow-800 rounded px-4 py-3 mt-4">
                     No hay productos disponibles para la venta.<br />
@@ -268,20 +270,22 @@ export default function SalesPage() {
                 )}
               </div>
               <div className="w-full md:w-1/3">
-                <RegistryPanel
-                  cartItems={cartItems}
-                  products={products}
-                  formatPrice={formatPrice}
-                  updateQuantity={updateQuantity}
-                  removeFromCart={removeFromCart}
-                  cartTotal={cartTotal}
-                  cartCount={cartCount}
-                  isProcessingSale={isProcessingSale}
-                  handleOpenPaymentModal={handleOpenPaymentModal}
-                  handleCancelSale={handleCancelSale}
-                  paymentMethod={paymentMethod}
-                  setPaymentMethod={setPaymentMethod}
-                />
+                <ErrorBoundary>
+                  <RegistryPanel
+                    cartItems={cartItems}
+                    products={products}
+                    formatPrice={formatPrice}
+                    updateQuantity={updateQuantity}
+                    removeFromCart={removeFromCart}
+                    cartTotal={cartTotal}
+                    cartCount={cartCount}
+                    isProcessingSale={isProcessingSale}
+                    handleOpenPaymentModal={handleOpenPaymentModal}
+                    handleCancelSale={handleCancelSale}
+                    paymentMethod={paymentMethod}
+                    setPaymentMethod={setPaymentMethod}
+                  />
+                </ErrorBoundary>
               </div>
             </div>
           </div>
@@ -290,29 +294,33 @@ export default function SalesPage() {
 
           {/* Solo un modal puede estar abierto a la vez */}
           {showCancelModal && !showPaymentModal && (
-            <Modal
-              key="cancel-modal"
-              show={true}
-              title="Cancelar Venta"
-              message="¿Está seguro que desea cancelar la venta y vaciar el carrito?"
-              onConfirm={confirmCancelSale}
-              onCancel={() => setShowCancelModal(false)}
-            />
+            <ErrorBoundary>
+              <Modal
+                key="cancel-modal"
+                show={true}
+                title="Cancelar Venta"
+                message="¿Está seguro que desea cancelar la venta y vaciar el carrito?"
+                onConfirm={confirmCancelSale}
+                onCancel={() => setShowCancelModal(false)}
+              />
+            </ErrorBoundary>
           )}
           {showPaymentModal && !showCancelModal && (
-            <PaymentModal
-              key={paymentModalKey}
-              show={true}
-              cartTotal={cartTotal}
-              onConfirm={handleConfirmPayment}
-              onCancel={handleClosePaymentModal}
-              showToast={showToast}
-              isProcessingSale={isProcessingSale}
-              paymentMethod={paymentMethod}
-            />
+            <ErrorBoundary>
+              <PaymentModal
+                key={paymentModalKey}
+                show={true}
+                cartTotal={cartTotal}
+                onConfirm={handleConfirmPayment}
+                onCancel={handleClosePaymentModal}
+                showToast={showToast}
+                isProcessingSale={isProcessingSale}
+                paymentMethod={paymentMethod}
+              />
+            </ErrorBoundary>
           )}
-        </>
-      </ErrorBoundary>
+        </ErrorBoundary>
+      </>
     );
 }
 
