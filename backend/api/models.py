@@ -1,17 +1,33 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+from django.utils import timezone
 
-# =============================
-# Modelos requeridos por el profesor
-# =============================
-
-# Modelo para Usuario
 class Usuario(AbstractUser):
-    rol = models.CharField(max_length=20, choices=[('admin', 'Admin'), ('cajero', 'Cajero')], default='cajero')
-    creado_en = models.DateTimeField(auto_now_add=True)
+    ROLES = (
+        ('admin', 'Administrador'),
+        ('usuario', 'Usuario'),
+        ('cajero', 'Cajero'),
+    )
+    rol = models.CharField(max_length=20, choices=ROLES, default='usuario')
+    activo = models.BooleanField(default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    ultimo_acceso = models.DateTimeField(null=True, blank=True)
+    recovery_token = models.CharField(max_length=64, blank=True, null=True)
+    recovery_token_expiry = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return self.username
+        return f"{self.username} ({self.rol})"
+
+class UserActionLog(models.Model):
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
+    accion = models.CharField(max_length=255)
+    fecha = models.DateTimeField(auto_now_add=True)
+    detalles = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.usuario.username}: {self.accion} ({self.fecha})"
 
 # Modelo para Categoria
 class Categoria(models.Model):
@@ -37,12 +53,16 @@ class Producto(models.Model):
     nombre = models.CharField(max_length=100)
     descripcion = models.TextField(blank=True)
     categoria = models.ForeignKey(Categoria, on_delete=models.CASCADE)
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.SET_NULL, null=True, blank=True)
     precio_compra = models.DecimalField(max_digits=10, decimal_places=2)
     precio_venta = models.DecimalField(max_digits=10, decimal_places=2)
     stock_actual = models.IntegerField()
     stock_minimo = models.IntegerField()
     unidad_medida = models.CharField(max_length=20)
+    fecha_vencimiento = models.DateField(null=True, blank=True)
     creado_en = models.DateTimeField(auto_now_add=True)
+    codigo_barra = models.CharField(max_length=64, unique=True, null=False, blank=False)
+
 
     def __str__(self):
         return self.nombre
@@ -117,4 +137,16 @@ class DetalleCompra(models.Model):
 
     def __str__(self):
         return f"Compra {self.compra.id} - Producto {self.producto.nombre}"
+
+
+@receiver(post_save, sender=Usuario)
+def log_usuario_save(sender, instance, created, **kwargs):
+    accion = "Creación" if created else "Edición"
+    detalles = f"Usuario {instance.username} ({instance.rol}) {'creado' if created else 'editado'}."
+    UserActionLog.objects.create(usuario=instance, accion=accion, detalles=detalles)
+
+@receiver(post_delete, sender=Usuario)
+def log_usuario_delete(sender, instance, **kwargs):
+    detalles = f"Usuario {instance.username} ({instance.rol}) eliminado."
+    UserActionLog.objects.create(usuario=instance, accion="Eliminación", detalles=detalles)
 

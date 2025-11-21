@@ -28,7 +28,9 @@ const InformeSemanal = ({ reportData, formatCLP }) => {
       link.setAttribute('download', 'reporte_ventas_semanal.csv');
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      if (link.parentNode) {
+        link.parentNode.removeChild(link);
+      }
     };
   if (!reportData || Object.keys(reportData).length === 0 || reportData.error) {
     return (

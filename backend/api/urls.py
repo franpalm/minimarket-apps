@@ -1,16 +1,24 @@
-
-# URLs para la API
 from django.urls import path
 from . import views
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+from rest_framework.routers import DefaultRouter
+from .views import ProductoViewSet
+
+router = DefaultRouter()
+router.register(r'productos-rest', ProductoViewSet, basename='productos-rest')
 
 urlpatterns = [
+    # Resumen de inversión en inventario
+    path('resumen-inversion/', views.resumen_inversion_inventario, name='resumen_inversion_inventario'),
     # URLs pedidos por el profesor 
     path('productos/', views.productos_list, name='productos_list'),
     path('productos/<int:pk>/', views.producto_detail, name='producto_detail'),
+
+    # Endpoint REST para edición completa de productos
+    *router.urls,
 
     path('categorias/', views.categorias_list, name='categorias_list'),
     path('categorias/<int:pk>/', views.categoria_detail, name='categoria_detail'),
@@ -24,6 +32,7 @@ urlpatterns = [
     # Endpoints de usuario
     path('usuarios/', views.usuarios_list, name='usuarios_list'),
     path('usuarios/<int:pk>/', views.usuario_detail, name='usuario_detail'),
+    path('usuarios/<int:pk>/forzar_recuperacion/', views.forzar_recuperacion, name='forzar_recuperacion'),
     
     # URLs extras para el proyecto de punto de venta
     path('categorias-gasto/', views.categorias_gasto_list, name='categorias_gasto_list'),
@@ -48,9 +57,11 @@ urlpatterns = [
     path('mp/check-intent/<str:intent_id>/', views.check_payment_status, name='check_payment_status'),
 
     # JWT Auth endpoints
-    path('login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # Ejemplo de endpoint protegido
     path('protected/', views.ProtectedExampleView.as_view(), name='protected_example'),
+    path('tuu/create-intent/', views.create_tuu_intent, name='create_tuu_intent'),
+    path('compraaqui/create-intent/', views.create_compraaqui_intent, name='create_compraaqui_intent'),
 ]

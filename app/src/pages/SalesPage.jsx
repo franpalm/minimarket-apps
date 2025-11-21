@@ -1,4 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import useScanDetection from '../hooks/useScanDetection';
+
+// Sonidos
+const beepUrl = '/sounds/beep.mp3';
+const errorUrl = '/sounds/error.mp3';
+
+function playSound(url) {
+  // Envuelto en try-catch para evitar errores si falta el archivo
+  try {
+    const audio = new window.Audio(url);
+    audio.play().catch(e => console.warn("Audio play prevented:", e));
+  } catch (e) {
+    console.warn("Audio error:", e);
+  }
+}
+
 import ErrorBoundary from '../components/ErrorBoundary';
 import ProductList from '../components/sales/ProductList';
 import RegistryPanel from '../components/sales/RegistryPanel';
@@ -7,7 +23,50 @@ import ToastContainer from '../components/sales/ToastContainer';
 import Modal from '../components/sales/Modal';
 
 export default function SalesPage() {
-  // Estado para limpiar el carrito después de desmontar el modal
+  // Lógica de escáner
+  useScanDetection(async (codigo) => {
+    try {
+      // Buscar producto por código de barras en el array local (instantáneo)
+      let producto = products.find(p => p.codigo_barra === codigo);
+      // Si no está en el array local, intentar buscar en la API
+      if (!producto) {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`http://localhost:8000/api/productos-rest/?codigo_barra=${codigo}`, {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+            'Content-Type': 'application/json'
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Si la API retorna una lista, tomar el primero
+          if (Array.isArray(data) && data.length > 0) {
+            producto = data[0];
+          } else if (data && data.id) {
+            producto = data;
+          }
+        }
+      }
+      // Validar existencia y stock
+      if (producto && producto.id) {
+        if (producto.stock_actual > 0) {
+          addToCart(producto.id);
+          playSound(beepUrl);
+          showToast('Escaneo exitoso', `Producto agregado: ${producto.nombre}`, 'success');
+        } else {
+          playSound(errorUrl);
+          showToast('Sin stock', `${producto.nombre} está agotado`, 'error');
+        }
+      } else {
+        playSound(errorUrl);
+        showToast('Producto no encontrado', `Código: ${codigo}`, 'error');
+      }
+    } catch (err) {
+      playSound(errorUrl);
+      showToast('Error de conexión', 'No se pudo buscar el producto', 'error');
+    }
+  });
+
   const [pendingClearCart, setPendingClearCart] = useState(false);
   const [products, setProducts] = useState([]);
   const [cartItems, setCartItems] = useState([]);
@@ -34,17 +93,22 @@ export default function SalesPage() {
     setToasts((prev) => [...prev, { id, title, message, type }]);
   }, []);
 
-  // Cargar productos desde la API REST
   const loadProducts = useCallback(() => {
     setIsLoading(true);
-  fetch('http://localhost:8000/api/productos/')
+    const token = localStorage.getItem('token');
+    fetch('http://localhost:8000/api/productos-rest/', {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json'
+      }
+    })
       .then(res => res.json())
       .then(data => {
         setProducts(data);
         setIsLoading(false);
       })
       .catch(() => {
-        showToast('Error', 'No se pudieron cargar los productos del inventario.', 'error');
+        showToast('Error', 'No se pudieron cargar los productos.', 'error');
         setIsLoading(false);
       });
   }, [showToast]);
@@ -53,51 +117,59 @@ export default function SalesPage() {
     loadProducts();
   }, [loadProducts]);
 
-  // Carrito
   const addToCart = useCallback((productId) => {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
-    setCartItems((prev) => {
-      const existing = prev.find((item) => item.id === productId);
-      if (existing) {
-        if (existing.quantity < product.stock_actual) {
-          return prev.map((item) =>
-            item.id === productId ? { ...item, quantity: item.quantity + 1 } : item
-          );
+    
+    // Usamos setTimeout para desacoplar la actualización del evento actual
+    setTimeout(() => {
+      setCartItems((prev) => {
+        const existing = prev.find((item) => item.id === productId);
+        if (existing) {
+          if (existing.quantity < product.stock_actual) {
+            return prev.map((item) =>
+              item.id === productId ? { ...item, quantity: item.quantity + 1 } : item
+            );
+          } else {
+            showToast('Stock insuficiente', `No hay suficiente stock`, 'error');
+            return prev;
+          }
         } else {
-          showToast('Stock insuficiente', `No hay suficiente stock para ${product.nombre}`, 'error');
-          return prev;
+          if (product.stock_actual > 0) {
+            return [...prev, { id: product.id, nombre: product.nombre, precio_venta: product.precio_venta, quantity: 1 }];
+          } else {
+            showToast('Sin stock', `${product.nombre} está agotado`, 'error');
+            return prev;
+          }
         }
-      } else {
-        if (product.stock_actual > 0) {
-          return [...prev, { id: product.id, nombre: product.nombre, precio_venta: product.precio_venta, quantity: 1 }];
-        } else {
-          showToast('Sin stock', `${product.nombre} está agotado`, 'error');
-          return prev;
-        }
-      }
-    });
+      });
+    }, 0);
   }, [products, showToast]);
 
+  // --- CORRECCIÓN CRÍTICA: setTimeout en updateQuantity ---
   const updateQuantity = useCallback((productId, change) => {
-    setCartItems((prev) => {
-      return prev.map(item =>
-        item.id === productId
-          ? { ...item, quantity: Math.max(1, item.quantity + change) }
-          : item
-      );
-    });
+    setTimeout(() => {
+      setCartItems((prev) => {
+        return prev.map(item =>
+          item.id === productId
+            ? { ...item, quantity: Math.max(1, item.quantity + change) }
+            : item
+        );
+      });
+    }, 0);
   }, []);
 
+  // --- CORRECCIÓN CRÍTICA: setTimeout en removeFromCart ---
   const removeFromCart = useCallback((productId) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== productId));
+    setTimeout(() => {
+      setCartItems((prev) => prev.filter((item) => item.id !== productId));
+    }, 0);
   }, []);
 
-  // Modal handlers
   const handleOpenPaymentModal = useCallback(() => {
     setIsProcessingSale(false);
     if (cartItems.length === 0) {
-      showToast('Error', 'No hay productos en el carrito', 'error');
+      showToast('Error', 'El carrito está vacío', 'error');
       return;
     }
     setPaymentModalKey(prev => prev + 1);
@@ -111,72 +183,52 @@ export default function SalesPage() {
   const confirmCancelSale = useCallback(() => {
     setCartItems([]);
     setShowCancelModal(false);
-    showToast('Venta Cancelada', 'Se ha vaciado el carrito', 'success');
+    showToast('Venta Cancelada', 'Carrito vaciado', 'success');
   }, [showToast]);
 
-  // Función para cerrar el modal de pago
   const handleClosePaymentModal = useCallback(() => {
-  // Solo ocultar el modal al cerrar; NO cambiar la key aquí para evitar remounts/doble desmontaje
-  setShowPaymentModal(false);
+    setShowPaymentModal(false);
   }, []);
 
-  // Usar API REST para registrar la venta
   const handleConfirmPayment = useCallback(async (cashReceived, changeDue, paymentMethodUsed = null, terminalResult = null) => {
     setIsProcessingSale(true);
     try {
-      if (!cartItems || cartItems.length === 0) {
-        showToast('Error', 'No hay productos en el carrito.', 'error');
-        setIsProcessingSale(false);
-        return;
-      }
-
-      // Determinar método de pago utilizado
       const finalPaymentMethod = paymentMethodUsed || paymentMethod;
+      let intentId = null;
+      let metodoPago = finalPaymentMethod;
 
-      // Validaciones específicas por método de pago
-      if (finalPaymentMethod === 'efectivo') {
-        if (!cashReceived || cashReceived < cartTotal) {
-          showToast('Error', 'Ingresa un monto recibido válido.', 'error');
-          setIsProcessingSale(false);
-          return;
-        }
-      } else if (finalPaymentMethod === 'tarjeta') {
-        if (!terminalResult || !terminalResult.success) {
-          showToast('Error', 'El pago con terminal no fue completado exitosamente.', 'error');
-          setIsProcessingSale(false);
-          return;
-        }
+      if (finalPaymentMethod === 'efectivo' && (!cashReceived || cashReceived < cartTotal)) {
+         showToast('Error', 'Monto inválido.', 'error');
+         setIsProcessingSale(false);
+         return;
       }
 
-      // Transformar cartItems a detalles para el backend
+      // Solo efectivo y débito
+      if (finalPaymentMethod === 'Tarjeta') {
+        metodoPago = 'Tarjeta';
+      } else {
+        metodoPago = 'efectivo';
+      }
+
       const detalles = cartItems.map(item => ({
         producto: item.id,
         cantidad_vendida: item.quantity,
         precio_unitario_venta: item.precio_venta
       }));
 
-      // Preparar payload base
       const payload = {
         detalles,
         fecha_venta: new Date().toISOString(),
-        metodo_pago: finalPaymentMethod === 'efectivo' ? 'Efectivo' : 'Tarjeta',
-        usuario_id: 1, // Usuario fijo para pruebas
+        metodo_pago: metodoPago,
+        usuario_id: 1,
         monto_total: cartTotal,
         monto_recibido: cashReceived || cartTotal,
-        vuelto: changeDue || 0
+        vuelto: changeDue || 0,
+        intent_id: intentId
       };
 
-      // Agregar información específica de terminal si es pago con tarjeta
-      if (finalPaymentMethod === 'tarjeta' && terminalResult) {
-        payload.informacion_terminal = {
-          terminal_type: terminalResult.connector || 'unknown',
-          transaction_id: terminalResult.transactionId,
-          authorization_code: terminalResult.authorizationCode,
-          card_type: terminalResult.cardType,
-          last_4_digits: terminalResult.last4Digits,
-          receipt_number: terminalResult.receiptNumber,
-          processing_time: terminalResult.processingTime
-        };
+      if (terminalResult) {
+         payload.informacion_terminal = { ...terminalResult };
       }
 
       const response = await fetch('http://localhost:8000/api/ventas/', {
@@ -187,141 +239,114 @@ export default function SalesPage() {
       const result = await response.json();
 
       if (response.ok && result.id) {
-        // Mensaje personalizado según método de pago
-        let successMessage = 'Pago realizado con éxito';
-        if (finalPaymentMethod === 'tarjeta' && terminalResult) {
-          successMessage = `Pago con ${terminalResult.cardType || 'tarjeta'} procesado exitosamente`;
-          if (terminalResult.authorizationCode) {
-            successMessage += ` (Auth: ${terminalResult.authorizationCode})`;
-          }
-        } else if (finalPaymentMethod === 'efectivo') {
-          successMessage = `Pago en efectivo completado. Vuelto: $${changeDue?.toLocaleString('es-CL') || 0}`;
-        }
-
-        showToast('Venta Completada', successMessage, 'success');
-        // Estado intermedio: desmontar modal y luego limpiar carrito
+        showToast('Venta Completada', 'Pago realizado con éxito', 'success');
         handleClosePaymentModal();
         setPendingClearCart(true);
-      } else if (response.ok) {
-        showToast('Venta registrada', 'La venta fue procesada pero no se recibió confirmación completa.', 'warning');
       } else {
-        showToast('Error', result?.error || result?.message || 'Error al completar la venta.', 'error');
+        showToast('Error', result?.error || 'Error al completar venta.', 'error');
       }
     } catch (error) {
-      showToast('Error', error.message || 'Error inesperado al completar la venta.', 'error');
+      showToast('Error', 'Error de conexión.', 'error');
     } finally {
       setIsProcessingSale(false);
     }
-  }, [cartItems, showToast, paymentMethod, loadProducts]);
-  // Efecto para limpiar el carrito y recargar productos después de desmontar el modal
+  }, [cartItems, showToast, paymentMethod, loadProducts]); // eslint-disable-line
+
+  const cartTotal = cartItems.reduce((sum, item) => sum + item.precio_venta * item.quantity, 0);
+  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
   useEffect(() => {
     if (pendingClearCart && !showPaymentModal) {
       const timer = setTimeout(() => {
         setCartItems([]);
         loadProducts();
         setPendingClearCart(false);
-      }, 300); // Delay to allow modal to unmount gracefully
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [pendingClearCart, showPaymentModal, loadProducts]);
-    // Calcular totales
-    const cartTotal = cartItems.reduce((sum, item) => sum + item.precio_venta * item.quantity, 0);
-    const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
-    // Renderizado principal con ErrorBoundary
-    return (
-      <>
-        <ErrorBoundary>
-          <header className="w-full bg-white shadow mb-6">
-            <div className="max-w-7xl mx-auto flex justify-between items-center h-20 px-4">
-              <div className="flex items-center">
-                <img
-                  src="/logo192.png"
-                  alt="MiniMarket Pro Logo"
-                  className="w-12 h-12 object-contain"
-                />
-                <span className="ml-3 font-bold text-2xl text-gray-700">MiniMarket Pro</span>
-              </div>
-              <h1 className="text-lg font-bold text-gray-600">POS Ventas</h1>
+  return (
+    <>
+      <ErrorBoundary>
+        <header className="w-full bg-white shadow mb-6">
+          <div className="max-w-7xl mx-auto flex justify-between items-center h-20 px-4">
+            <div className="flex items-center">
+              <img src="/logo192.png" alt="Logo" className="w-12 h-12 object-contain" />
+              <span className="ml-3 font-bold text-2xl text-gray-700">MiniMarket Pro</span>
             </div>
-          </header>
+            <h1 className="text-lg font-bold text-gray-600">POS Ventas</h1>
+          </div>
+        </header>
 
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex flex-col md:flex-row gap-6">
-              <div className="w-full md:w-2/3">
-                <ErrorBoundary>
-                  <ProductList
-                    products={products.filter(p =>
-                      p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      p.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase())
-                    )}
-                    isLoading={isLoading}
-                    searchTerm={searchTerm}
-                    setSearchTerm={setSearchTerm}
-                    addToCart={addToCart}
-                    formatPrice={formatPrice}
-                  />
-                </ErrorBoundary>
-                {!isLoading && products.length === 0 && (
-                  <div className="bg-yellow-100 text-yellow-800 rounded px-4 py-3 mt-4">
-                    No hay productos disponibles para la venta.<br />
-                    <b>Revisa la consola del backend para ver el log de productos.</b>
-                  </div>
-                )}
-              </div>
-              <div className="w-full md:w-1/3">
-                <ErrorBoundary>
-                  <RegistryPanel
-                    cartItems={cartItems}
-                    products={products}
-                    formatPrice={formatPrice}
-                    updateQuantity={updateQuantity}
-                    removeFromCart={removeFromCart}
-                    cartTotal={cartTotal}
-                    cartCount={cartCount}
-                    isProcessingSale={isProcessingSale}
-                    handleOpenPaymentModal={handleOpenPaymentModal}
-                    handleCancelSale={handleCancelSale}
-                    paymentMethod={paymentMethod}
-                    setPaymentMethod={setPaymentMethod}
-                  />
-                </ErrorBoundary>
-              </div>
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex flex-col md:flex-row gap-6">
+            <div className="w-full md:w-2/3">
+              <ErrorBoundary>
+                <ProductList
+                  products={products.filter(p =>
+                    p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (p.codigo_producto && p.codigo_producto.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                    (p.codigo_barra && p.codigo_barra.toLowerCase().includes(searchTerm.toLowerCase()))
+                  )}
+                  isLoading={isLoading}
+                  searchTerm={searchTerm}
+                  setSearchTerm={setSearchTerm}
+                  addToCart={addToCart}
+                  formatPrice={formatPrice}
+                />
+              </ErrorBoundary>
+            </div>
+            <div className="w-full md:w-1/3">
+              <ErrorBoundary>
+                <RegistryPanel
+                  cartItems={cartItems}
+                  products={products}
+                  formatPrice={formatPrice}
+                  updateQuantity={updateQuantity}
+                  removeFromCart={removeFromCart}
+                  cartTotal={cartTotal}
+                  cartCount={cartCount}
+                  isProcessingSale={isProcessingSale}
+                  handleOpenPaymentModal={handleOpenPaymentModal}
+                  handleCancelSale={handleCancelSale}
+                  paymentMethod={paymentMethod}
+                  setPaymentMethod={setPaymentMethod}
+                />
+              </ErrorBoundary>
             </div>
           </div>
+        </div>
 
-          <ToastContainer toasts={toasts} setToasts={setToasts} />
+        <ToastContainer toasts={toasts} setToasts={setToasts} />
 
-          {/* Solo un modal puede estar abierto a la vez */}
-          {showCancelModal && !showPaymentModal && (
-            <ErrorBoundary>
-              <Modal
-                key="cancel-modal"
-                show={true}
-                title="Cancelar Venta"
-                message="¿Está seguro que desea cancelar la venta y vaciar el carrito?"
-                onConfirm={confirmCancelSale}
-                onCancel={() => setShowCancelModal(false)}
-              />
-            </ErrorBoundary>
-          )}
-          {showPaymentModal && !showCancelModal && (
-            <ErrorBoundary>
-              <PaymentModal
-                key={paymentModalKey}
-                show={true}
-                cartTotal={cartTotal}
-                onConfirm={handleConfirmPayment}
-                onCancel={handleClosePaymentModal}
-                showToast={showToast}
-                isProcessingSale={isProcessingSale}
-                paymentMethod={paymentMethod}
-              />
-            </ErrorBoundary>
-          )}
-        </ErrorBoundary>
-      </>
-    );
+        {showCancelModal && !showPaymentModal && (
+          <ErrorBoundary>
+            <Modal
+              key="cancel-modal"
+              show={true}
+              title="Cancelar Venta"
+              message="¿Está seguro que desea cancelar la venta?"
+              onConfirm={confirmCancelSale}
+              onCancel={() => setShowCancelModal(false)}
+            />
+          </ErrorBoundary>
+        )}
+        {showPaymentModal && !showCancelModal && (
+          <ErrorBoundary>
+            <PaymentModal
+              key={paymentModalKey}
+              show={true}
+              cartTotal={cartTotal}
+              onConfirm={handleConfirmPayment}
+              onCancel={handleClosePaymentModal}
+              showToast={showToast}
+              isProcessingSale={isProcessingSale}
+              paymentMethod={paymentMethod}
+            />
+          </ErrorBoundary>
+        )}
+      </ErrorBoundary>
+    </>
+  );
 }
-
-

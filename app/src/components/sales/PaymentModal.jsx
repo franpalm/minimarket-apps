@@ -168,89 +168,93 @@ const PaymentModal = ({ show, cartTotal, onConfirm, onCancel, showToast, payment
             </div>
           )}
           {selectedPaymentMethod === 'terminal' && (
-            (selectedTerminal === 'compraqui_manual' ? (
-              <TerminalPagoBancoEstado
-                monto={cartTotal}
-                onVentaConfirmada={() => {
-                  // Confirmar venta con método compraqui_manual
-                  onConfirm(cartTotal, 0, 'compraqui_manual', null);
-                }}
-                onCancel={onCancel}
-              />
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block font-medium mb-1">Terminal:</label>
-                  <select
-                    value={selectedTerminal}
-                    onChange={(e) => setSelectedTerminal(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    disabled={isProcessing || isConnected}
-                  >
-                    {/* Agregar opción manual Compraquí BancoEstado */}
-                    <option value="compraqui_manual">Compraquí BancoEstado (Manual)</option>
-                    {availableTerminals.filter(t => t !== 'compraqui_manual').map(terminal => (
-                      <option key={terminal} value={terminal}>
-                        {terminal === 'simulator' ? '🧪 Simulador (Testing)' : 
-                         terminal.charAt(0).toUpperCase() + terminal.slice(1)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium">Estado de conexión:</span>
-                    <span className={`px-2 py-1 rounded-full text-sm font-medium ${
-                      isConnected 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {isConnected ? '✅ Conectado' : '❌ Desconectado'}
-                    </span>
+            <div className="mb-4">
+              <label className="block font-medium mb-2">Elige terminal:</label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
+                <button
+                  className={`p-3 rounded-lg border-2 transition-all ${selectedTerminal === 'MercadoPago' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-gray-400'}`}
+                  onClick={() => setSelectedTerminal('MercadoPago')}
+                  disabled={isProcessing}
+                >
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">🛒</div>
+                    <div className="font-medium">Mercado Pago</div>
                   </div>
-                  {terminalType && (
-                    <div className="text-sm text-gray-600 mb-2">
-                      Terminal: {terminalType}
-                    </div>
-                  )}
-                  {connectionStatus.lastPing && (
-                    <div className="text-xs text-gray-500">
-                      Último ping: {new Date(connectionStatus.lastPing).toLocaleTimeString()}
-                    </div>
-                  )}
-                </div>
-                {!isConnected && (
-                  <button
-                    onClick={handleConnectTerminal}
-                    disabled={isProcessing || !selectedTerminal}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-3 font-medium transition-colors disabled:bg-gray-400"
-                  >
-                    {isProcessing ? 'Conectando...' : 'Conectar Terminal'}
-                  </button>
-                )}
-                {paymentStatus && (
-                  <div className={`p-3 rounded-lg text-sm ${
-                    paymentStatus.includes('Error') || paymentStatus.includes('error')
-                      ? 'bg-red-100 text-red-800 border border-red-200'
-                      : paymentStatus.includes('exitoso') || paymentStatus.includes('Éxito')
-                        ? 'bg-green-100 text-green-800 border border-green-200'
-                        : 'bg-blue-100 text-blue-800 border border-blue-200'
+                </button>
+                <button
+                  className={`p-3 rounded-lg border-2 transition-all ${selectedTerminal === 'Tuu' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 hover:border-gray-400'}`}
+                  onClick={() => setSelectedTerminal('Tuu')}
+                  disabled={isProcessing}
+                >
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">🤖</div>
+                    <div className="font-medium">TUU</div>
+                  </div>
+                </button>
+                <button
+                  className={`p-3 rounded-lg border-2 transition-all ${selectedTerminal === 'CompraAqui' ? 'border-yellow-500 bg-yellow-50 text-yellow-700' : 'border-gray-300 hover:border-gray-400'}`}
+                  onClick={() => setSelectedTerminal('CompraAqui')}
+                  disabled={isProcessing}
+                >
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">🏦</div>
+                    <div className="font-medium">CompraAquí</div>
+                  </div>
+                </button>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium">Estado de conexión:</span>
+                  <span className={`px-2 py-1 rounded-full text-sm font-medium ${
+                    isConnected 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-red-100 text-red-800'
                   }`}>
-                    <div className="font-medium">{paymentStatus}</div>
-                    {currentTransaction && currentTransaction.status === 'processing' && (
-                      <div className="mt-2">
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
-                        </div>
-                        <div className="text-xs mt-1 text-gray-600">
-                          Procesando pago de {formatPrice(currentTransaction.amount)}...
-                        </div>
-                      </div>
-                    )}
+                    {isConnected ? '✅ Conectado' : '❌ Desconectado'}
+                  </span>
+                </div>
+                {terminalType && (
+                  <div className="text-sm text-gray-600 mb-2">
+                    Terminal: {terminalType}
+                  </div>
+                )}
+                {connectionStatus.lastPing && (
+                  <div className="text-xs text-gray-500">
+                    Último ping: {new Date(connectionStatus.lastPing).toLocaleTimeString()}
                   </div>
                 )}
               </div>
-            ))
+              {!isConnected && (
+                <button
+                  onClick={handleConnectTerminal}
+                  disabled={isProcessing || !selectedTerminal}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-3 font-medium transition-colors disabled:bg-gray-400"
+                >
+                  {isProcessing ? 'Conectando...' : 'Conectar Terminal'}
+                </button>
+              )}
+              {paymentStatus && (
+                <div className={`p-3 rounded-lg text-sm ${
+                  paymentStatus.includes('Error') || paymentStatus.includes('error')
+                    ? 'bg-red-100 text-red-800 border border-red-200'
+                    : paymentStatus.includes('exitoso') || paymentStatus.includes('Éxito')
+                      ? 'bg-green-100 text-green-800 border border-green-200'
+                      : 'bg-blue-100 text-blue-800 border border-blue-200'
+                }`}>
+                  <div className="font-medium">{paymentStatus}</div>
+                  {currentTransaction && currentTransaction.status === 'processing' && (
+                    <div className="mt-2">
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
+                      </div>
+                      <div className="text-xs mt-1 text-gray-600">
+                        Procesando pago de {formatPrice(currentTransaction.amount)}...
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             {isProcessing && selectedPaymentMethod === 'terminal' && (
@@ -300,7 +304,7 @@ const PaymentModal = ({ show, cartTotal, onConfirm, onCancel, showToast, payment
         </React.Fragment>
       </div>
     </div>,
-    document.getElementById('modal-root')
+    document.getElementById('modal-root') || document.body
   );
 }
 

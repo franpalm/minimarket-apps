@@ -1,3 +1,115 @@
+# Endpoint: inversión total en inventario por categoría
+from django.views.decorators.csrf import csrf_exempt
+from django.db.models import Sum, F
+
+@csrf_exempt
+def resumen_inversion_inventario(request):
+    if request.method != 'GET':
+        return HttpResponseNotAllowed(['GET'])
+    try:
+        # Agrupa por categoría y suma (precio_compra * stock_actual)
+        from .models import Producto, Categoria
+        categorias = Categoria.objects.all()
+        resumen = []
+        total_general = 0
+        for cat in categorias:
+            total_cat = Producto.objects.filter(categoria=cat, stock_actual__gt=0).aggregate(
+                inversion=Sum(F('precio_compra') * F('stock_actual'))
+            )["inversion"] or 0
+            resumen.append({
+                "categoria_id": cat.id,
+                "categoria": cat.nombre,
+                "total_inversion": float(total_cat)
+            })
+            total_general += float(total_cat)
+        return JsonResponse({
+            "resumen": resumen,
+            "total_general": total_general
+        })
+    except Exception as e:
+        return HttpResponseBadRequest(str(e))
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+import uuid
+
+# --- TUU Terminal ---
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_tuu_intent(request):
+    """
+    Simula la creación de un intento de pago en TUU.
+    Devuelve un intentId ficticio.
+    """
+    intent_id = f"TUU-{uuid.uuid4()}"
+    return Response({"intentId": intent_id, "status": "success"})
+
+# --- CompraAquí Terminal ---
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_compraaqui_intent(request):
+    """
+    Simula la creación de un intento de pago en CompraAquí.
+    Devuelve éxito inmediato.
+    """
+    intent_id = f"COMPRAAQUI-{uuid.uuid4()}"
+    return Response({"intentId": intent_id, "status": "success"})
+from rest_framework import viewsets
+from .models import Producto
+from .serializers import ProductoSerializer
+
+# ViewSet REST para productos
+class ProductoViewSet(viewsets.ModelViewSet):
+    queryset = Producto.objects.all()
+    serializer_class = ProductoSerializer
+from rest_framework.permissions import BasePermission
+
+class IsAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and getattr(request.user, 'rol', None) == 'admin'
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+
+# --- Endpoint para forzar recuperación de contraseña ---
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def forzar_recuperacion(request, pk):
+    """
+    Permite al admin forzar el envío de email de recuperación de contraseña a un usuario.
+    """
+    try:
+        usuario = Usuario.objects.get(pk=pk)
+        # Generar token de recuperación (simple, para demo; en producción usar JWT o similar)
+        token = get_random_string(32)
+        usuario.recovery_token = token
+        usuario.recovery_token_expiry = timezone.now() + timezone.timedelta(hours=1)
+        usuario.save()
+        # Enviar email
+        send_mail(
+            'Recuperación de contraseña',
+            f'Hola {usuario.username},\n\nPara recuperar tu contraseña, haz clic en el siguiente enlace:\n\nhttps://tusitio.com/recuperar?token={token}\n\nEste enlace expirará en 1 hora.',
+            'no-reply@tusitio.com',
+            [usuario.email],
+            fail_silently=False,
+        )
+        # Registrar acción en el log
+        UserActionLog.objects.create(
+            usuario=request.user,
+            accion='Forzar recuperación',
+            detalles=f'Admin {request.user.username} forzó recuperación para usuario {usuario.username}.'
+        )
+        return Response({'ok': True, 'message': 'Email de recuperación enviado.'})
+    except Usuario.DoesNotExist:
+        return Response({'error': 'Usuario no encontrado.'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+from rest_framework.permissions import BasePermission
+
+class IsAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and getattr(request.user, 'rol', None) == 'admin'
 # [INICIO] Código de Mercado Pago
 # ========================================
 # Imports para las nuevas vistas de Mercado Pago
@@ -6,6 +118,10 @@ from rest_framework.permissions import AllowAny # Usamos AllowAny para estos end
 from rest_framework.response import Response
 from rest_framework import status
 import mercadopago
+from django.core.mail import send_mail
+from django.utils.crypto import get_random_string
+from django.utils import timezone
+from .models import UserActionLog, Usuario
 from django.conf import settings # Para leer el token desde settings.py
 
 @api_view(['POST'])
@@ -150,7 +266,7 @@ def analisis_productos(request):
         return HttpResponseBadRequest(str(e))
 
         # 1. Obtener todos los productos con stock, costo y precio
-        productos = Producto.objects.select_related('categoria').all()
+        productos = Producto.objects.select_related('categoria', 'proveedor').all()
         productos_data = []
         for p in productos:
             productos_data.append({
@@ -244,7 +360,7 @@ def reporte_diario(request):
 
         # Ventas por hora (8 a 19)
         sales_by_hour = [0] * 12
-        ventas_por_hora = ventas.extra({'hora': "strftime('%%H', fecha_venta)"}).values_list('hora').annotate(total=Sum('total_venta'))
+        ventas_por_hora = ventas.extra({'hora': "HOUR(fecha_venta)"}).values_list('hora').annotate(total=Sum('total_venta'))
         for hora, total in ventas_por_hora:
             idx = int(hora) - 8
             if 0 <= idx < 12:
@@ -522,6 +638,7 @@ def productos_list(request):
             productos_list.append({
                 'id': p.id,
                 'codigo_producto': p.id,  # No existe campo, se usa id como código
+                'codigo_barra': p.codigo_barra,
                 'nombre': p.nombre,
                 'descripcion': p.descripcion,
                 'precio_compra': float(p.precio_compra),
@@ -532,24 +649,22 @@ def productos_list(request):
                 'id_categoria': p.categoria.id if p.categoria else None,
                 'codigo_categoria': p.categoria.id if p.categoria else '',
                 'nombre_categoria': p.categoria.nombre if p.categoria else '',
-                'nombre_proveedor': 'N/A',  # Siempre 'N/A' ya que no hay proveedor directo
-                'fecha_vencimiento': '', # No hay campo en modelo
+                'nombre_proveedor': p.proveedor.nombre if getattr(p, 'proveedor', None) else '',
+                'fecha_vencimiento': p.fecha_vencimiento.isoformat() if getattr(p, 'fecha_vencimiento', None) else '',
             })
         return JsonResponse(productos_list, safe=False)
     elif request.method == 'POST':
         try:
             data = get_request_data(request)
-            producto = Producto.objects.create(
-                nombre=data.get('nombre', ''),
-                descripcion=data.get('descripcion', ''),
-                categoria_id=data.get('categoria'),
-                precio_compra=data.get('precio_compra', 0),
-                precio_venta=data.get('precio_venta', 0),
-                stock_actual=data.get('stock_actual', 0),
-                stock_minimo=data.get('stock_minimo', 0),
-                unidad_medida=data.get('unidad_medida', '')
-            )
-            return JsonResponse({'id': producto.id}, status=201)
+            serializer = ProductoSerializer(data=data)
+            if serializer.is_valid():
+                producto = serializer.save()
+                return JsonResponse({
+                    'id': producto.id,
+                    'codigo_barra': producto.codigo_barra
+                }, status=201)
+            else:
+                return HttpResponseBadRequest(serializer.errors)
         except Exception as e:
             return HttpResponseBadRequest(str(e))
     else:
@@ -587,6 +702,15 @@ def producto_detail(request, pk):
             producto.stock_actual = data.get('stock_actual', producto.stock_actual)
             producto.stock_minimo = data.get('stock_minimo', producto.stock_minimo)
             producto.unidad_medida = data.get('unidad_medida', producto.unidad_medida)
+            # Normaliza y valida codigo_barra si viene en el request
+            if 'codigo_barra' in data:
+                nuevo_codigo = data.get('codigo_barra', producto.codigo_barra)
+                if isinstance(nuevo_codigo, str):
+                    nuevo_codigo = nuevo_codigo.strip().lower()
+                # Verifica unicidad excluyendo el propio producto
+                if Producto.objects.filter(codigo_barra__iexact=nuevo_codigo).exclude(pk=producto.pk).exists():
+                    return HttpResponseBadRequest('El código de barras ya existe en otro producto.')
+                producto.codigo_barra = nuevo_codigo
             producto.save()
             return JsonResponse({'ok': True})
         except Exception as e:
@@ -648,11 +772,18 @@ def categorias_list(request):
     elif request.method == 'POST':
         try:
             data = get_request_data(request)
+            nombre = data.get('nombre') or data.get('nombre_categoria') or ''
+            descripcion = data.get('descripcion', '')
             categoria = Categoria.objects.create(
-                nombre=data.get('nombre', ''),
-                descripcion=data.get('descripcion', '')
+                nombre=nombre,
+                descripcion=descripcion
             )
-            return JsonResponse({'id': categoria.id}, status=201)
+            return JsonResponse({
+                'id': categoria.id,
+                'nombre': categoria.nombre,
+                'nombre_categoria': categoria.nombre,
+                'descripcion': categoria.descripcion
+            }, status=201)
         except Exception as e:
             return HttpResponseBadRequest(str(e))
     else:
@@ -681,6 +812,8 @@ def categoria_detail(request, pk):
             categoria.descripcion = data.get('descripcion', categoria.descripcion)
             categoria.save()
             return JsonResponse({'ok': True})
+        except Exception as e:
+            return HttpResponseBadRequest(str(e))
         except Exception as e:
             return HttpResponseBadRequest(str(e))
     elif request.method == 'DELETE':

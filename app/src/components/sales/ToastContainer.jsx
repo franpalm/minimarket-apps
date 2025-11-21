@@ -1,6 +1,7 @@
 
 
 import React, { useEffect, useRef } from 'react';
+import { formatCLP } from '../../utils/formatCLP';
 
 const Toast = ({ toast, onStartClose }) => {
   useEffect(() => {
@@ -32,7 +33,9 @@ const Toast = ({ toast, onStartClose }) => {
       </div>
       <div className="flex-1">
         <div className="font-bold">{toast.title}</div>
-        <div className="text-sm">{toast.message}</div>
+        <div className="text-sm">
+          {typeof toast.message === 'number' ? formatCLP(toast.message) : toast.message}
+        </div>
       </div>
       <button
         className="ml-4 text-gray-500 hover:text-gray-800 text-xl font-bold focus:outline-none"
@@ -46,28 +49,35 @@ const Toast = ({ toast, onStartClose }) => {
 
 const ToastContainer = ({ toasts, setToasts }) => {
   const timeoutRefs = useRef({});
+  // DEBUG: Log toasts on each render
+  useEffect(() => {
+    console.log('[ToastContainer] Render toasts:', toasts);
+  }, [toasts]);
 
-  // Efecto para limpiar todos los timeouts al desmontar el contenedor
+  // Limpiar todos los timeouts al desmontar el contenedor
   useEffect(() => {
     return () => {
-      for (const id in timeoutRefs.current) {
-        clearTimeout(timeoutRefs.current[id]);
-      }
+      Object.values(timeoutRefs.current).forEach(clearTimeout);
+      timeoutRefs.current = {};
     };
   }, []);
 
   // Marca el toast como cerrando, y lo elimina tras la animación
   const startClose = (id) => {
-    // Evitar doble cierre
+    // Evitar doble cierre y duplicación de timeout
     const isAlreadyClosing = toasts.find(t => t.id === id)?.closing;
-    if (isAlreadyClosing) return;
+    if (isAlreadyClosing || timeoutRefs.current[id]) {
+      console.warn(`[ToastContainer] Toast ${id} ya está cerrando o tiene timeout activo.`);
+      return;
+    }
 
+    console.log(`[ToastContainer] Iniciando cierre de toast ${id}`);
     setToasts((prev) =>
       prev.map((t) => (t.id === id ? { ...t, closing: true } : t))
     );
 
-    // Guardar y manejar el timeout para la eliminación final
     timeoutRefs.current[id] = setTimeout(() => {
+      console.log(`[ToastContainer] Eliminando toast ${id}`);
       setToasts((prev) => prev.filter((t) => t.id !== id));
       delete timeoutRefs.current[id]; // Limpiar la referencia
     }, 300); // Coincide con la duración de la animación de opacidad

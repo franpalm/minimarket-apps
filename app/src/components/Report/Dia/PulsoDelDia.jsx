@@ -28,7 +28,9 @@ const PulsoDelDia = ({ reportData, formatCLP }) => {
       link.setAttribute('download', 'reporte_ventas_dia.csv');
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      if (link.parentNode) {
+        link.parentNode.removeChild(link);
+      }
     };
   const [modalOpen, setModalOpen] = useState(false);
 

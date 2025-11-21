@@ -33,7 +33,9 @@ const InformeMensual = ({ reportData, formatCLP, onMonthChange, monthComparison,
       link.setAttribute('download', 'reporte_ventas_mensual.csv');
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      if (link.parentNode) {
+        link.parentNode.removeChild(link);
+      }
     };
   // El mes seleccionado viene de props (1-based)
   const selectedMonth = typeof month === 'number' && month > 0 ? month - 1 : new Date().getMonth();
@@ -216,7 +218,7 @@ const InformeMensual = ({ reportData, formatCLP, onMonthChange, monthComparison,
             {/* Línea de promedio */}
             <Bar dataKey="ventas" 
               label={({ x, y, width, value }) => value > 0 ? (
-                <text x={x + width / 2} y={y - 5} textAnchor="middle" fontSize="11" fill="#6366f1">{formatCLP(value)}</text>
+                <tspan x={x + width / 2} y={y - 5} textAnchor="middle" fontSize="11" fill="#6366f1">{formatCLP(value)}</tspan>
               ) : null}
               fill="#6366f1"
               >

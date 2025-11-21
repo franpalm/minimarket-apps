@@ -13,6 +13,39 @@ function parseThousands(value) {
 function ProductsTable({ products, loading, categoryFilter, setCategoryFilter, categorias, reload, onUpdateProduct, onDeleteProduct }) {
   const [editingId, setEditingId] = useState(null);
   const [editedProduct, setEditedProduct] = useState({});
+  // Filtro de productos por categoría
+  const filteredProducts = categoryFilter === 'all'
+    ? products
+    : products.filter(p => (p.id_categoria || p.categoria_id) && String(p.id_categoria || p.categoria_id) === String(categoryFilter));
+
+  // Función para iniciar edición de producto
+  const handleEditClick = (product) => {
+    setEditingId(product.id);
+    setEditedProduct({ ...product });
+  };
+
+  // Función para cancelar edición
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditedProduct({});
+  };
+
+  // Función para guardar cambios
+  const handleSaveClick = async () => {
+    if (!editedProduct.nombre || !editedProduct.codigo_barra) {
+      alert('Nombre y Código Producto son obligatorios');
+      return;
+    }
+    await onUpdateProduct(editedProduct);
+    setEditingId(null);
+    setEditedProduct({});
+  };
+
+  // Función para manejar cambios en los inputs
+  const handleChangeEdit = (e) => {
+    const { name, value } = e.target;
+    setEditedProduct(prev => ({ ...prev, [name]: value }));
+  };
 
     const formatPrice = (price) => {
       return new Intl.NumberFormat('es-CL', {
@@ -22,72 +55,6 @@ function ProductsTable({ products, loading, categoryFilter, setCategoryFilter, c
         maximumFractionDigits: 0
       }).format(price);
     };
-
-    const parseCLPString = (value) => {
-      const stringValue = typeof value === 'number' ? value.toString() : value;
-      return parseFloat(stringValue.replace(/\./g, '').replace(/[^0-9,-]+/g, '').replace(',', '.') || 0);
-    };
-
-    const handleEditClick = (product) => {
-      setEditingId(product.id);
-      setEditedProduct({
-        ...product,
-        precio_compra: parseCLPString(product.precio_compra),
-        precio_venta: parseCLPString(product.precio_venta),
-        stock_actual: product.stock_actual || 0,
-        stock_minimo: product.stock_minimo || 0,
-        id_categoria: product.id_categoria
-        // Eliminado id_proveedor, ya no se edita
-      });
-    };
-
-    const handleSaveClick = async () => {
-      if (!editedProduct.nombre || isNaN(editedProduct.precio_compra) || isNaN(editedProduct.precio_venta) ||
-        isNaN(editedProduct.stock_actual) || isNaN(editedProduct.stock_minimo) ||
-        (editedProduct.id_categoria === null || editedProduct.id_categoria === undefined || editedProduct.id_categoria === '')) {
-        alert('Por favor, completa los campos obligatorios: Nombre, Precio Compra, Precio Venta, Stock Actual, Stock Mínimo y Categoría.');
-        return;
-      }
-
-      try {
-        const productToSave = {
-          ...editedProduct,
-          categoria: editedProduct.id_categoria ? parseInt(editedProduct.id_categoria) : null, // para backend
-          id_categoria: undefined, // eliminar del payload
-          stock_actual: parseInt(editedProduct.stock_actual),
-          stock_minimo: parseInt(editedProduct.stock_minimo),
-          fecha_vencimiento: editedProduct.fecha_vencimiento ? new Date(editedProduct.fecha_vencimiento).toISOString().split('T')[0] : null,
-          unidad_medida: editedProduct.unidad_medida || ''
-        };
-        await onUpdateProduct(productToSave);
-        setEditingId(null);
-      } catch (error) {
-        console.error("Error al guardar producto editado:", error);
-      }
-    };
-
-    const handleCancelEdit = () => {
-      setEditingId(null);
-      setEditedProduct({});
-    };
-
-    const handleChangeEdit = (e) => {
-      const { name, value } = e.target;
-      if (["precio_compra", "precio_venta"].includes(name)) {
-        setEditedProduct(prev => ({ ...prev, [name]: value }));
-      } else if (["stock_actual", "stock_minimo"].includes(name)) {
-        setEditedProduct(prev => ({ ...prev, [name]: parseThousands(value) }));
-      } else if (name === "id_categoria") {
-        setEditedProduct(prev => ({ ...prev, [name]: parseInt(value) }));
-      } else {
-        setEditedProduct(prev => ({ ...prev, [name]: value }));
-      }
-    };
-
-    const filteredProducts = categoryFilter === 'all'
-      ? products
-      : products.filter(p => p.id_categoria && p.id_categoria.toString() === categoryFilter);
-
     return (
       <div className="rounded-lg shadow mb-6 bg-white mt-4">
         <div className="bg-gray-100 border-b border-gray-200 font-semibold px-4 py-2 flex flex-col md:flex-row md:justify-between md:items-center gap-2">
@@ -152,7 +119,7 @@ function ProductsTable({ products, loading, categoryFilter, setCategoryFilter, c
                     <tr key={product.id} className="hover:bg-blue-50 even:bg-gray-50 border-b border-gray-200">
                       {editingId === product.id ? (
                         <>
-                          <td><input type="text" name="codigo_producto" value={editedProduct.codigo_producto || ''} onChange={handleChangeEdit} className="border rounded px-2 py-1 w-full" /></td>
+                          <td><input type="text" name="codigo_barra" value={editedProduct.codigo_barra || ''} onChange={handleChangeEdit} className="border rounded px-2 py-1 w-full" required /></td>
                           <td><input type="text" name="nombre" value={editedProduct.nombre || ''} onChange={handleChangeEdit} className="border rounded px-2 py-1 w-full" required /></td>
                           <td><textarea name="descripcion" value={editedProduct.descripcion || ''} onChange={handleChangeEdit} className="border rounded px-2 py-1 w-full" rows="1"></textarea></td>
                           <td><input type="number" name="precio_compra" value={editedProduct.precio_compra || ''} onChange={handleChangeEdit} className="border rounded px-2 py-1 w-full" required /></td>
@@ -205,7 +172,9 @@ function ProductsTable({ products, loading, categoryFilter, setCategoryFilter, c
                               ))}
                             </select>
                           </td>
-                          <td className="text-center">N/A</td>
+                          <td className="text-center">
+                            {editedProduct.proveedor?.nombre || editedProduct.nombre_proveedor || 'N/A'}
+                          </td>
                           <td><input type="date" name="fecha_vencimiento" value={editedProduct.fecha_vencimiento ? new Date(editedProduct.fecha_vencimiento).toISOString().split('T')[0] : ''} onChange={handleChangeEdit} className="border rounded px-2 py-1 w-full" /></td>
                           <td className="flex gap-1 justify-center">
                             <button className="bg-green-600 hover:bg-green-700 text-white rounded px-2 py-1 text-xs flex items-center gap-1" onClick={handleSaveClick} title="Guardar">
@@ -218,7 +187,7 @@ function ProductsTable({ products, loading, categoryFilter, setCategoryFilter, c
                         </>
                       ) : (
                         <>
-                          <td>{product.codigo_producto || 'N/A'}</td>
+                          <td>{product.codigo_barra ? product.codigo_barra : (product.codigo_producto ? product.codigo_producto : 'N/A')}</td>
                           <td>{product.nombre}</td>
                           <td>{product.descripcion || 'N/A'}</td>
                           <td>{formatPrice(product.precio_compra)}</td>
@@ -227,7 +196,7 @@ function ProductsTable({ products, loading, categoryFilter, setCategoryFilter, c
                           <td>{formatThousands(parseInt(product.stock_minimo, 10))}</td>
                           <td>{product.unidad_medida || 'N/A'}</td>
                           <td>{categorias && categorias.find(cat => String(cat.id) === String(product.id_categoria))?.nombre_categoria || 'N/A'}</td>
-                          <td className="text-center">N/A</td>
+                          <td className="text-center">{product.nombre_proveedor || (product.proveedor && product.proveedor.nombre) || 'N/A'}</td>
                           <td>{product.fecha_vencimiento ? new Date(product.fecha_vencimiento).toLocaleDateString() : 'N/A'}</td>
                           <td className="flex gap-1 justify-center">
                             <button className="bg-blue-600 hover:bg-blue-700 text-white rounded px-2 py-1 text-xs flex items-center gap-1" onClick={() => handleEditClick(product)} title="Editar">

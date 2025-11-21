@@ -46,8 +46,12 @@ export default function ProductList({
           products.map(product => (
             <button
               key={product.id}
-              className="bg-gray-50 border border-gray-300 rounded-lg px-6 py-4 flex justify-between items-center shadow-sm hover:bg-blue-50 transition cursor-pointer group"
-              onClick={() => addToCart(product.id)}
+              type="button" // IMPORTANTE: Definir tipo explícito
+              className="bg-gray-50 border border-gray-300 rounded-lg px-6 py-4 flex justify-between items-center shadow-sm hover:bg-blue-50 transition cursor-pointer group text-left w-full"
+              onClick={(e) => {
+                e.stopPropagation(); // Buena práctica para evitar bubbling indeseado
+                addToCart(product.id);
+              }}
               title="Agregar al carrito"
             >
               <div>
@@ -57,9 +61,18 @@ export default function ProductList({
                 </div>
                 <div className="text-gray-500 text-sm">
                   <i className="bi bi-upc-scan mr-1"></i>
-                  Código: {product.codigo_producto} | 
+                  Código: {product.codigo_barra || product.codigo_producto} |
                   <i className="bi bi-boxes ml-2 mr-1"></i>
                   Stock: {parseInt(product.stock_actual, 10)}
+                  {product.nombre_categoria && (
+                    <span className="ml-2">| Cat: {product.nombre_categoria}</span>
+                  )}
+                  {product.nombre_proveedor && (
+                    <span className="ml-2">| Prov: {product.nombre_proveedor}</span>
+                  )}
+                  {product.fecha_vencimiento && (
+                    <span className="ml-2">| Vto: {new Date(product.fecha_vencimiento).toLocaleDateString()}</span>
+                  )}
                 </div>
               </div>
               <div className="text-blue-600 font-bold text-lg ml-8 flex items-center gap-2">

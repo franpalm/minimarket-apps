@@ -22,6 +22,8 @@ const LoginPage = ({ onLogin, activarModoPrueba }) => {
         if (response.ok && data.access) {
           sessionStorage.setItem('access_token', data.access);
           sessionStorage.setItem('refresh_token', data.refresh);
+          localStorage.setItem('token', data.access);
+          localStorage.setItem('refresh_token', data.refresh);
           onLogin();
         } else {
           setError(data.detail || 'Credenciales incorrectas');
