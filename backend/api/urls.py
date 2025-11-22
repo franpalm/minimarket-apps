@@ -4,11 +4,13 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+
 from rest_framework.routers import DefaultRouter
-from .views import ProductoViewSet
+from .views import ProductoViewSet, CategoriaGastoViewSet
 
 router = DefaultRouter()
 router.register(r'productos-rest', ProductoViewSet, basename='productos-rest')
+router.register(r'categorias-gasto', CategoriaGastoViewSet, basename='categorias-gasto')
 
 urlpatterns = [
     # Resumen de inversión en inventario

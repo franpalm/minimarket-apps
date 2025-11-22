@@ -30,3 +30,18 @@ VALUES
 ('2025-08-28', 700, 'efectivo'),
 ('2025-08-28', 1800, 'tarjeta'),
 ('2025-08-28', 1500, 'efectivo');
+
+
+
+INSERT INTO api_producto (
+    nombre, descripcion, precio_compra, precio_venta, stock_actual, stock_minimo,
+    unidad_medida, creado_en, categoria_id, codigo_barra, fecha_vencimiento, proveedor_id
+) VALUES
+('Papas Fritas', 'Bolsa de papas fritas', 500, 800, 100, 10, 'unidad', NOW(), 5, '1234567890123', '2026-12-31', 1),
+('Empanadas', 'Empanadas fritas de queso', 700, 1200, 50, 5, 'unidad', NOW(), 5, '1234567890124', '2026-12-31', 1);
+
+-- Puedes cambiar proveedor_id=1 por el id real de un proveedor si es necesario.
+Cannot add or update a child row: a foreign key constraint fails (`minimarket-app`.`api_producto`, CONSTRAINT `api_producto_proveedor_id_c6f06079_fk_api_proveedor_id` FOREIGN KEY (`proveedor_id`) REFERENCES `api_proveedor` (`id`)
+)
+SELECT id, nombre FROM api_proveedor;
+SELECT id, nombre FROM api_proveedor;

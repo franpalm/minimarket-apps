@@ -1,4 +1,11 @@
 from rest_framework import serializers
+from .models import CategoriaGasto
+
+class CategoriaGastoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CategoriaGasto
+        fields = '__all__'
+from rest_framework import serializers
 from .models import Producto, Categoria, Proveedor, Compra, DetalleCompra, Venta, DetalleVenta, CategoriaGasto, Gasto, Usuario
 
 class ProductoSerializer(serializers.ModelSerializer):

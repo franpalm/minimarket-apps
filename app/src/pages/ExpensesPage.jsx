@@ -1,45 +1,52 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNotification } from "../components/Notification";
 import Chart from 'chart.js/auto';
 import { getGastos, createGasto, updateGasto, deleteGasto } from "../services/GastoService";
+import { getCategories, createCategory } from "../services/CategoryService";
 
-const defaultCategories = ["arriendo", "servicios", "insumos", "sueldos", "imprevistos"];
+
 
 function ExpensesPage() {
   const [theme, setTheme] = useState('light');
   const [expenses, setExpenses] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [categories, setCategories] = useState(defaultCategories);
+  const [categories, setCategories] = useState([]);
   const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
-    category: "",
-    amount: "",
-    description: ""
+    fecha: new Date().toISOString().split('T')[0],
+    categoria: "",
+    monto: "",
+    metodo_pago: "Efectivo",
+    descripcion: ""
   });
   const [showForm, setShowForm] = useState(false);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [newCategory, setNewCategory] = useState("");
   const [editingExpense, setEditingExpense] = useState(null);
-
+  const [loading, setLoading] = useState(false);
   const monthlyChartRef = useRef(null);
-  const monthlyChartInstance = useRef(null);
   const categoryChartRef = useRef(null);
+  const monthlyChartInstance = useRef(null);
   const categoryChartInstance = useRef(null);
+  const { showNotification } = useNotification();
 
-  useEffect(() => {
-    const root = window.document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-  }, [theme]);
-
-  // Cargar gastos desde el backend al montar el componente
   useEffect(() => {
     setLoading(true);
     getGastos()
       .then(data => setExpenses(data))
       .finally(() => setLoading(false));
+    // Cargar categorías desde backend
+    getCategories().then(data => {
+      // Log para depuración
+      console.log('Categorías recibidas:', data);
+      let cats = [];
+      if (Array.isArray(data)) {
+        cats = data;
+      } else if (data && data.results) {
+        cats = data.results;
+      }
+      // Filtrar solo categorías con id y nombre válidos
+      cats = cats.filter(c => c && (c.id || c.pk) && (c.nombre || c.name));
+      setCategories(cats);
+    });
   }, []);
 
   useEffect(() => {
@@ -87,30 +94,55 @@ function ExpensesPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    if (editingExpense) {
-      await updateGasto(editingExpense.id, form);
-      setEditingExpense(null);
-    } else {
-      await createGasto(form);
+    if (!form.fecha || !form.categoria || !form.monto || !form.metodo_pago || !form.descripcion) {
+      showNotification("Todos los campos son obligatorios.", "error");
+      return;
     }
-    getGastos().then(data => setExpenses(data));
-    setForm({
-      date: new Date().toISOString().split('T')[0],
-      category: "",
-      amount: "",
-      description: ""
-    });
-    setShowForm(false);
+    setLoading(true);
+    const payload = {
+      fecha: form.fecha,
+      categoria_id: form.categoria, // Enviar como categoria_id para el backend
+      monto: form.monto,
+      metodo_pago: form.metodo_pago,
+      descripcion: form.descripcion
+    };
+    try {
+      let resp;
+      if (editingExpense) {
+        resp = await updateGasto(editingExpense.id, payload);
+        setEditingExpense(null);
+      } else {
+        resp = await createGasto(payload);
+      }
+      if (resp && resp.id) {
+        getGastos().then(data => setExpenses(data));
+        setForm({
+          fecha: new Date().toISOString().split('T')[0],
+          categoria: "",
+          monto: "",
+          metodo_pago: "Efectivo",
+          descripcion: ""
+        });
+        setShowForm(false);
+        showNotification(editingExpense ? "Gasto actualizado correctamente." : "Gasto registrado correctamente.", "success");
+      } else if (resp && resp.error) {
+        showNotification(resp.error, "error");
+      } else {
+        showNotification("Error al guardar el gasto. Verifica los datos.", "error");
+      }
+    } catch (err) {
+      showNotification("Error de red o del servidor.", "error");
+    }
     setLoading(false);
   };
 
   const handleEditExpense = (expense) => {
     setForm({
-      date: expense.fecha || expense.date,
-      category: expense.categoria || expense.category,
-      amount: expense.monto?.toString() || expense.amount?.toString(),
-      description: expense.descripcion || expense.description
+      fecha: expense.fecha || new Date().toISOString().split('T')[0],
+      categoria: expense.categoria || "",
+      monto: expense.monto?.toString() || "",
+      metodo_pago: expense.metodo_pago || "Efectivo",
+      descripcion: expense.descripcion || ""
     });
     setEditingExpense(expense);
   };
@@ -125,20 +157,40 @@ function ExpensesPage() {
   const handleCancelEdit = () => {
     setEditingExpense(null);
     setForm({
-      date: new Date().toISOString().split('T')[0],
-      category: "",
-      amount: "",
-      description: ""
+      fecha: new Date().toISOString().split('T')[0],
+      categoria: "",
+      monto: "",
+      metodo_pago: "Efectivo",
+      descripcion: ""
     });
   };
 
-  const handleAddCategory = (e) => {
+  const handleAddCategory = async (e) => {
     e.preventDefault();
-    if (newCategory.trim() && !categories.includes(newCategory.toLowerCase().trim())) {
-      const updatedCategories = [...categories, newCategory.toLowerCase().trim()];
-      setCategories(updatedCategories);
-      setNewCategory("");
-      setShowCategoryForm(false);
+    const nombre = newCategory.trim();
+    if (!nombre) return;
+    try {
+      const resp = await createCategory({ nombre });
+      if (resp && (resp.id || resp.pk)) {
+        showNotification("Categoría agregada correctamente.", "success");
+        setNewCategory("");
+        setShowCategoryForm(false);
+        // Refrescar categorías desde backend
+        getCategories().then(data => {
+          let cats = [];
+          if (Array.isArray(data)) {
+            cats = data;
+          } else if (data && data.results) {
+            cats = data.results;
+          }
+          cats = cats.filter(c => c && (c.id || c.pk) && (c.nombre || c.name));
+          setCategories(cats);
+        });
+      } else {
+        showNotification("No se pudo agregar la categoría.", "error");
+      }
+    } catch (err) {
+      showNotification("Error al agregar la categoría.", "error");
     }
   };
 
@@ -221,19 +273,28 @@ function ExpensesPage() {
                 </form>
               )}
               <form onSubmit={handleSubmit} className="space-y-4">
-                <input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} className="w-full p-3 bg-slate-100 dark:bg-slate-700 border-transparent rounded-lg text-slate-800 dark:text-slate-200" required/>
-                <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full p-3 bg-slate-100 dark:bg-slate-700 border-transparent rounded-lg text-slate-800 dark:text-slate-200" required>
+                <input type="date" value={form.fecha} onChange={e => setForm({...form, fecha: e.target.value})} className="w-full p-3 bg-slate-100 dark:bg-slate-700 border-transparent rounded-lg text-slate-800 dark:text-slate-200" required/>
+                <select value={form.categoria} onChange={e => setForm({...form, categoria: e.target.value})} className="w-full p-3 bg-slate-100 dark:bg-slate-700 border-transparent rounded-lg text-slate-800 dark:text-slate-200" required>
                   <option value="">Categoría</option>
-                  {categories.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                  {categories.length === 0 && <option disabled value="">No hay categorías</option>}
+                  {categories.map((c) => {
+                    const id = c.id || c.pk;
+                    const nombre = c.nombre || c.name;
+                    if (!id || !nombre) return null;
+                    return (
+                      <option key={`cat-${id}`} value={id}>{nombre}</option>
+                    );
+                  })}
                 </select>
+                <input type="text" value={form.metodo_pago} onChange={e => setForm({...form, metodo_pago: e.target.value})} placeholder="Método de pago" className="w-full p-3 bg-slate-100 dark:bg-slate-700 border-transparent rounded-lg text-slate-800 dark:text-slate-200" required/>
                 <textarea 
-                  value={form.description} 
-                  onChange={e => setForm({...form, description: e.target.value})} 
+                  value={form.descripcion} 
+                  onChange={e => setForm({...form, descripcion: e.target.value})} 
                   placeholder="Descripción del gasto..." 
                   className="w-full p-3 bg-slate-100 dark:bg-slate-700 border-transparent rounded-lg text-slate-800 dark:text-slate-200 resize-none h-20"
                   required
                 />
-                <input type="number" value={form.amount} placeholder="Monto" onChange={e => setForm({...form, amount: e.target.value})} className="w-full p-3 bg-slate-100 dark:bg-slate-700 border-transparent rounded-lg text-slate-800 dark:text-slate-200" required/>
+                <input type="number" value={form.monto} placeholder="Monto" onChange={e => setForm({...form, monto: e.target.value})} className="w-full p-3 bg-slate-100 dark:bg-slate-700 border-transparent rounded-lg text-slate-800 dark:text-slate-200" required/>
                 <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg shadow-lg">
                   {editingExpense ? "Actualizar Gasto" : "Añadir"}
                 </button>

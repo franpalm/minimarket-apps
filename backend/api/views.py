@@ -1,3 +1,12 @@
+from rest_framework import viewsets
+from .models import CategoriaGasto
+from .serializers import CategoriaGastoSerializer
+
+class CategoriaGastoViewSet(viewsets.ModelViewSet):
+    queryset = CategoriaGasto.objects.all()
+    serializer_class = CategoriaGastoSerializer
+    from rest_framework.permissions import AllowAny
+    permission_classes = [AllowAny]
 # Endpoint: inversión total en inventario por categoría
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Sum, F
@@ -1043,7 +1052,7 @@ def gastos_list(request):
             )
             return JsonResponse({'id': gasto.id}, status=201)
         except Exception as e:
-            return HttpResponseBadRequest(str(e))
+            return JsonResponse({'error': str(e)}, status=400)
     else:
         return HttpResponseNotAllowed(['GET', 'POST'])
 
@@ -1080,10 +1089,13 @@ def gasto_detail(request, pk):
             gasto.save()
             return JsonResponse({'ok': True})
         except Exception as e:
-            return HttpResponseBadRequest(str(e))
+            return JsonResponse({'error': str(e)}, status=400)
     elif request.method == 'DELETE':
-        gasto.delete()
-        return JsonResponse({'ok': True})
+        try:
+            gasto.delete()
+            return JsonResponse({'ok': True})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
     else:
         return HttpResponseNotAllowed(['GET', 'PUT', 'DELETE'])
 

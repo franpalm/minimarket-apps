@@ -1,5 +1,12 @@
+from rest_framework import serializers
 from django.contrib import admin
-from .models import Usuario, UserActionLog
+from .models import CategoriaGasto, Usuario, UserActionLog
+
+
+
+@admin.register(CategoriaGasto)
+class CategoriaGastoAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'descripcion')
 
 @admin.register(Usuario)
 class UsuarioAdmin(admin.ModelAdmin):
