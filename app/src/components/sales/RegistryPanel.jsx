@@ -12,7 +12,8 @@ export default function RegistryPanel({
   handleOpenPaymentModal,
   handleCancelSale,
   paymentMethod,
-  setPaymentMethod
+  setPaymentMethod,
+  cajaAbierta
 }) {
   return (
     <div className="bg-white rounded-xl shadow p-6 mb-6 flex flex-col h-[calc(100vh-4rem)]">
@@ -149,7 +150,7 @@ export default function RegistryPanel({
             type="button"
             className="bg-green-600 hover:bg-green-700 text-white rounded px-4 py-2 font-bold flex items-center justify-center disabled:opacity-60"
             onClick={handleOpenPaymentModal}
-            disabled={cartItems.length === 0 || isProcessingSale}
+            disabled={cartItems.length === 0 || isProcessingSale || !cajaAbierta}
           >
             {isProcessingSale ? (
               'Procesando...'
@@ -159,6 +160,9 @@ export default function RegistryPanel({
               </>
             )}
           </button>
+          {!cajaAbierta && (
+            <div className="text-red-500 text-sm mt-2">Debes iniciar la caja para poder realizar ventas.</div>
+          )}
           <button
             type="button"
             className="bg-red-600 hover:bg-red-700 text-white rounded px-4 py-2 font-bold flex items-center justify-center disabled:opacity-60"

@@ -14,9 +14,15 @@ function ProductsTable({ products, loading, categoryFilter, setCategoryFilter, c
   const [editingId, setEditingId] = useState(null);
   const [editedProduct, setEditedProduct] = useState({});
   // Filtro de productos por categoría
+  // Normaliza el campo de categoría en cada producto para que siempre tenga 'id_categoria'
+  const normalizedProducts = products.map(p => ({
+    ...p,
+    id_categoria: p.id_categoria !== undefined ? p.id_categoria : p.categoria_id
+  }));
+
   const filteredProducts = categoryFilter === 'all'
-    ? products
-    : products.filter(p => (p.id_categoria || p.categoria_id) && String(p.id_categoria || p.categoria_id) === String(categoryFilter));
+    ? normalizedProducts
+    : normalizedProducts.filter(p => p.id_categoria && String(p.id_categoria) === String(categoryFilter));
 
   // Función para iniciar edición de producto
   const handleEditClick = (product) => {
@@ -36,7 +42,18 @@ function ProductsTable({ products, loading, categoryFilter, setCategoryFilter, c
       alert('Nombre y Código Producto son obligatorios');
       return;
     }
-    await onUpdateProduct(editedProduct);
+    // Normaliza el campo de categoría para el backend (espera 'categoria')
+    const categoriaId = editedProduct.id_categoria !== undefined
+      ? editedProduct.id_categoria
+      : (editedProduct.categoria_id !== undefined ? editedProduct.categoria_id : undefined);
+    const productToSave = {
+      ...editedProduct,
+      categoria: categoriaId,
+    };
+    // Elimina los campos auxiliares para evitar conflictos
+    delete productToSave.id_categoria;
+    delete productToSave.categoria_id;
+    await onUpdateProduct(productToSave);
     setEditingId(null);
     setEditedProduct({});
   };
@@ -163,7 +180,17 @@ function ProductsTable({ products, loading, categoryFilter, setCategoryFilter, c
                             </select>
                           </td>
                           <td>
-                            <select name="id_categoria" value={editedProduct.id_categoria || ''} onChange={handleChangeEdit} className="border rounded px-2 py-1 w-full" required>
+                            <select
+                              name="id_categoria"
+                              value={
+                                editedProduct.id_categoria !== undefined
+                                  ? editedProduct.id_categoria
+                                  : (editedProduct.categoria_id !== undefined ? editedProduct.categoria_id : '')
+                              }
+                              onChange={handleChangeEdit}
+                              className="border rounded px-2 py-1 w-full"
+                              required
+                            >
                               <option value="">Selecciona</option>
                               {categorias && categorias.map(cat => (
                                 <option key={cat.id} value={cat.id}>

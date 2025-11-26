@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import CajaHistoryModal from './CajaHistoryModal';
 import KPICard from '../KPICard';
 import SalesByHourChart from '../SalesByHourChart';
 import SalesBreakdownModal from '../SalesBreakdownModal';
@@ -37,8 +38,93 @@ const PulsoDelDia = ({ reportData, formatCLP }) => {
   // Usa breakdown real si viene del backend, si no, simula
   const breakdown = reportData?.breakdownByPayment || {};
 
+
+  // Resumen de caja y movimientos
+  const resumenCaja = reportData?.resumenCaja;
+  const caja = resumenCaja?.caja;
+
+  // Modal historial de caja
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [cajaHistory, setCajaHistory] = useState([]);
+
+  // Handler para mostrar historial de caja
+  const handleShowHistory = async () => {
+    // Siempre hace fetch al backend usando la fecha del reporte diario
+    try {
+      // Usar la fecha del reporte diario (from_date) si está disponible
+      let date = null;
+      if (reportData?.resumenCaja?.caja?.fecha_inicio) {
+        date = reportData.resumenCaja.caja.fecha_inicio.substring(0, 10);
+      } else if (reportData?.ventas?.length > 0 && reportData.ventas[0].fecha_venta) {
+        date = reportData.ventas[0].fecha_venta.substring(0, 10);
+      } else {
+        // fallback: hoy
+        date = new Date().toISOString().substring(0, 10);
+      }
+      const resp = await fetch(`/api/cajas/?fecha=${date}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setCajaHistory(data);
+        setHistoryOpen(true);
+      } else {
+        setCajaHistory([]);
+        setHistoryOpen(true);
+      }
+    } catch {
+      setCajaHistory([]);
+      setHistoryOpen(true);
+    }
+  };
+
   return (
     <>
+
+      {/* Bloque resumen de caja */}
+      <div className="mb-6">
+        <div className="bg-white rounded-lg shadow p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <i className={`bi ${caja?.estado === 'abierta' ? 'bi-unlock' : 'bi-lock'} text-indigo-600 text-xl`}></i>
+              <span className="font-semibold text-lg">Caja {caja ? (caja.estado === 'abierta' ? 'Abierta' : 'Cerrada') : 'No abierta'}</span>
+              {caja && (
+                <span className={`ml-2 px-2 py-1 rounded text-xs ${caja.estado === 'abierta' ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'}`}>{caja.estado}</span>
+              )}
+              {/* Botón historial */}
+              <button className="ml-4 px-2 py-1 rounded text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition flex items-center gap-1" onClick={handleShowHistory}>
+                <i className="bi bi-clock-history"></i> Ver historial
+              </button>
+            </div>
+            <div className="text-sm text-gray-600">
+              Usuario: <span className="font-medium">{caja?.usuario || '-'}</span>
+              {caja?.fecha_inicio && (
+                <span className="ml-4">Inicio: {new Date(caja.fecha_inicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              )}
+              {caja?.fecha_cierre && (
+                <span className="ml-4">Cierre: {new Date(caja.fecha_cierre).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-4 mt-4 md:mt-0">
+            <div className="text-center">
+              <div className="text-xs text-gray-500">Saldo Inicial</div>
+              <div className="font-bold text-lg">{formatCLP(resumenCaja?.saldo_inicial || 0)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-gray-500">Ingresos</div>
+              <div className="font-bold text-lg text-green-700">{formatCLP(resumenCaja?.ingresos || 0)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-gray-500">Egresos</div>
+              <div className="font-bold text-lg text-red-700">{formatCLP(resumenCaja?.egresos || 0)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-gray-500">Saldo Final</div>
+              <div className="font-bold text-lg">{resumenCaja?.saldo_final !== null && resumenCaja?.saldo_final !== undefined ? formatCLP(resumenCaja.saldo_final) : '-'}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <KPICard
           title="Ventas Totales"
@@ -106,6 +192,7 @@ const PulsoDelDia = ({ reportData, formatCLP }) => {
         </button>
       </div>
       <SalesBreakdownModal open={modalOpen} onClose={() => setModalOpen(false)} breakdown={breakdown} />
+      <CajaHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} history={cajaHistory} />
     </>
   );
 };

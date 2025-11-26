@@ -1,12 +1,153 @@
+# --- Caja endpoints ---
+from .models import Caja
+from .serializers import CajaSerializer
+from rest_framework import viewsets, permissions, status
+from rest_framework.response import Response
+from .models import Venta, Caja
+
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.utils import timezone
+
+# --- Venta ViewSet ---
+class VentaViewSet(viewsets.ModelViewSet):
+    queryset = Venta.objects.all()
+    # Asume que tienes un VentaSerializer ya definido
+    from .serializers import VentaSerializer
+    serializer_class = VentaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        usuario = request.user
+        maquina_id = request.data.get('maquina')
+        if not maquina_id:
+            return Response({'error': 'Debe especificar la máquina.'}, status=400)
+        caja_abierta = Caja.objects.filter(usuario=usuario, maquina_id=maquina_id, estado='abierta').first()
+        if not caja_abierta:
+            return Response({
+                'error': 'NO_CAJA_ABIERTA',
+                'message': 'Debe abrir una caja para este usuario y máquina antes de registrar una venta.'
+            }, status=400)
+        return super().create(request, *args, **kwargs)
+
+class CajaViewSet(viewsets.ModelViewSet):
+    queryset = Caja.objects.all().order_by('-fecha_inicio')
+    serializer_class = CajaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        # Filtrar por usuario si no es admin
+        if not user.is_superuser:
+            qs = qs.filter(usuario=user)
+        maquina = self.request.query_params.get('maquina')
+        if maquina:
+            qs = qs.filter(maquina_id=maquina)
+        fecha = self.request.query_params.get('fecha')
+        if fecha:
+            # Filtrar por fecha de inicio (solo ese día)
+            qs = qs.filter(fecha_inicio__date=fecha)
+        return qs
+
+    @action(detail=False, methods=['post'], url_path='abrir')
+    def abrir_caja(self, request):
+        """Iniciar caja nueva"""
+        user = request.user
+        maquina = request.data.get('maquina')
+        monto_inicial = request.data.get('monto_inicial')
+        if Caja.objects.filter(usuario=user, maquina_id=maquina, estado='abierta').exists():
+            return Response({'error': 'Ya hay una caja abierta para este usuario y máquina.'}, status=400)
+        caja = Caja.objects.create(
+            usuario=user,
+            maquina_id=maquina,
+            monto_inicial=monto_inicial,
+            estado='abierta'
+        )
+        return Response(self.get_serializer(caja).data)
+
+    @action(detail=True, methods=['post'], url_path='cerrar')
+    def cerrar_caja(self, request, pk=None):
+        """Cerrar caja y devolver resumen con totales reales"""
+        from .models import Venta, Gasto
+        from django.db.models import Sum
+        import logging
+        caja = self.get_object()
+        if caja.estado == 'cerrada':
+            return Response({'error': 'La caja ya está cerrada.'}, status=400)
+        monto_final = request.data.get('monto_final')
+        observaciones = request.data.get('observaciones', '')
+        caja.monto_final = monto_final
+        caja.fecha_cierre = timezone.now()
+        caja.estado = 'cerrada'
+        caja.observaciones = observaciones
+        caja.save()
+
+        # Determinar el rango de fechas de la caja
+        fecha_inicio = caja.fecha_inicio
+        fecha_cierre = caja.fecha_cierre
+        usuario = caja.usuario
+        maquina = caja.maquina
+
+
+        # LOGS DETALLADOS DE DEPURACIÓN
+        logging.warning(f"[CIERRE CAJA] usuario_obj={usuario}, usuario_id={usuario.id}, maquina_obj={maquina}, maquina_id={maquina.id if maquina else None}, fecha_inicio={fecha_inicio}, fecha_cierre={fecha_cierre}")
+
+        # Prueba filtro solo por usuario
+        ventas_usuario = Venta.objects.filter(usuario_id=usuario.id)
+        logging.warning(f"[CIERRE CAJA] Ventas solo usuario: {list(ventas_usuario.values('id','total_venta','fecha_venta','usuario','maquina'))}")
+
+        # Prueba filtro usuario + maquina
+        ventas_usuario_maquina = Venta.objects.filter(usuario_id=usuario.id, maquina_id=maquina.id if maquina else None)
+        logging.warning(f"[CIERRE CAJA] Ventas usuario+maquina: {list(ventas_usuario_maquina.values('id','total_venta','fecha_venta','usuario','maquina'))}")
+
+        # Prueba filtro usuario + maquina + fechas
+        ventas_qs = Venta.objects.filter(
+            usuario_id=usuario.id,
+            maquina_id=maquina.id if maquina else None,
+            fecha_venta__gte=fecha_inicio,
+            fecha_venta__lte=fecha_cierre
+        )
+        logging.warning(f"[CIERRE CAJA] Ventas usuario+maquina+fechas: {list(ventas_qs.values('id','total_venta','fecha_venta','usuario','maquina'))}")
+
+        ventas_total = ventas_qs.aggregate(total=Sum('total_venta'))['total'] or 0
+        ventas_efectivo = ventas_qs.filter(metodo_pago__iexact='efectivo').aggregate(total=Sum('total_venta'))['total'] or 0
+        ventas_terminal = ventas_qs.filter(metodo_pago__icontains='terminal').aggregate(total=Sum('total_venta'))['total'] or 0
+
+        # Gastos realizados durante la caja (usuario, entre fechas)
+        gastos_qs = Gasto.objects.filter(
+            usuario_id=usuario.id,
+            creado_en__gte=fecha_inicio,
+            creado_en__lte=fecha_cierre
+        )
+        gastos_total = gastos_qs.aggregate(total=Sum('monto'))['total'] or 0
+        logging.warning(f"[CIERRE CAJA] Gastos encontrados: {list(gastos_qs.values('id','monto','creado_en','usuario'))}")
+
+        # Diferencia entre ingresos y egresos
+        diferencia = (ventas_total or 0) - (gastos_total or 0)
+
+        resumen = {
+            'ventas_total': float(ventas_total),
+            'ventas_efectivo': float(ventas_efectivo),
+            'ventas_terminal': float(ventas_terminal),
+            'gastos': float(gastos_total),
+            'diferencia': float(diferencia),
+        }
+
+        return Response({
+            'caja': self.get_serializer(caja).data,
+            'resumen': resumen
+        })
+
 from rest_framework import viewsets
 from .models import CategoriaGasto
 from .serializers import CategoriaGastoSerializer
+from .permissions import IsAdmin, IsDueno, IsCajero
 
 class CategoriaGastoViewSet(viewsets.ModelViewSet):
     queryset = CategoriaGasto.objects.all()
     serializer_class = CategoriaGastoSerializer
-    from rest_framework.permissions import AllowAny
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdmin | IsDueno]
 # Endpoint: inversión total en inventario por categoría
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Sum, F
@@ -71,6 +212,7 @@ from .serializers import ProductoSerializer
 class ProductoViewSet(viewsets.ModelViewSet):
     queryset = Producto.objects.all()
     serializer_class = ProductoSerializer
+    permission_classes = [IsAdmin | IsDueno | IsCajero]
 from rest_framework.permissions import BasePermission
 
 class IsAdmin(BasePermission):
@@ -261,13 +403,33 @@ def analisis_productos(request):
         terminal_transaction_id = data.get('terminal_transaction_id')
         terminal_response = data.get('terminal_response')
         # ...existing code...
+        # Obtener la máquina desde el request (POST debe incluir 'maquina')
+        maquina_id = data.get('maquina')
+        from .models import Maquina, Caja
+        maquina = Maquina.objects.filter(id=maquina_id).first() if maquina_id else None
+        # Validar que exista una caja abierta para el usuario y máquina
+        caja_abierta = None
+        if usuario_id and maquina:
+            caja_abierta = Caja.objects.filter(usuario_id=usuario_id, maquina=maquina, estado='abierta').first()
+        if not caja_abierta:
+            return JsonResponse({
+                'error': 'NO_CAJA_ABIERTA',
+                'message': 'Debe abrir una caja para este usuario y máquina antes de registrar una venta.'
+            }, status=400)
+        # Asignar folio incremental por máquina
+        folio = None
+        if maquina:
+            last_folio = Venta.objects.filter(maquina=maquina).aggregate(Max('folio'))['folio__max']
+            folio = (last_folio or 0) + 1
         venta = Venta.objects.create(
             fecha_venta=fecha_venta,
             total_venta=total_venta,
             metodo_pago=metodo_pago,
             usuario_id=usuario_id,
             terminal_transaction_id=terminal_transaction_id if metodo_pago == 'terminal' else None,
-            terminal_response=terminal_response if metodo_pago == 'terminal' else None
+            terminal_response=terminal_response if metodo_pago == 'terminal' else None,
+            maquina=maquina,
+            folio=folio
         )
         # ...existing code...
         return JsonResponse({'venta_id': venta.id}, status=201)
@@ -345,18 +507,37 @@ def reporte_diario(request):
     if request.method != 'GET':
         return HttpResponseNotAllowed(['GET'])
     try:
+        from datetime import datetime
+        from .models import Caja, Venta, Gasto, DetalleVenta, Producto
+        from django.db.models import Sum, Avg, Count, F
         from_date = request.GET.get('dateFrom')
         to_date = request.GET.get('dateTo')
         category = request.GET.get('category')
         top_n = int(request.GET.get('topN', 5))
         payment = request.GET.get('payment')
         usuario_id = request.GET.get('usuario')
-        from datetime import datetime
+
         if not from_date:
             from_date = datetime.now().date()
         if not to_date:
             to_date = from_date
 
+        # Caja del día (puede haber más de una, tomamos la última abierta/cerrada)
+        caja = Caja.objects.filter(fecha_inicio__date=from_date).order_by('-fecha_inicio').first()
+        caja_data = None
+        if caja:
+            caja_data = {
+                'id': caja.id,
+                'estado': caja.estado,
+                'usuario': caja.usuario.username if caja.usuario else None,
+                'fecha_inicio': caja.fecha_inicio,
+                'fecha_cierre': caja.fecha_cierre,
+                'monto_inicial': float(caja.monto_inicial),
+                'monto_final': float(caja.monto_final) if caja.monto_final is not None else None,
+                'observaciones': caja.observaciones,
+            }
+
+        # Ventas del día
         ventas = Venta.objects.filter(fecha_venta__date__gte=from_date, fecha_venta__date__lte=to_date)
         if payment:
             ventas = ventas.filter(metodo_pago__iexact=payment)
@@ -376,7 +557,6 @@ def reporte_diario(request):
                 sales_by_hour[idx] = float(total)
 
         # Top productos
-        from .models import DetalleVenta, Producto
         detalles = DetalleVenta.objects.filter(venta__fecha_venta__date__gte=from_date, venta__fecha_venta__date__lte=to_date)
         if category:
             detalles = detalles.filter(producto__categoria_id=category)
@@ -396,14 +576,38 @@ def reporte_diario(request):
         breakdown_by_payment = {row['metodo_pago'].lower(): {'cantidad': row['cantidad'], 'total': float(row['total'])} for row in breakdown}
 
         ventas_list = list(ventas.values('id', 'fecha_venta', 'total_venta', 'metodo_pago', 'usuario_id', 'terminal_transaction_id', 'terminal_response'))
+
+        # Gastos del día
+        gastos = Gasto.objects.filter(fecha=from_date)
+        total_gastos = gastos.aggregate(total=Sum('monto'))['total'] or 0
+        gastos_list = list(gastos.values('id', 'fecha', 'monto', 'metodo_pago', 'descripcion', 'usuario_id'))
+
+        # Resumen de caja y movimientos
+        saldo_inicial = caja.monto_inicial if caja else 0
+        ingresos = total_sales
+        egresos = total_gastos
+        saldo_final = (caja.monto_final if caja and caja.monto_final is not None else (saldo_inicial + ingresos - egresos))
+
+        resumen_caja = {
+            'caja': caja_data,
+            'saldo_inicial': float(saldo_inicial),
+            'ingresos': float(ingresos),
+            'egresos': float(egresos),
+            'saldo_final': float(saldo_final) if saldo_final is not None else None,
+            'ventas_total': float(total_sales),
+            'gastos_total': float(total_gastos),
+            'breakdownByPayment': breakdown_by_payment,
+        }
+
         return JsonResponse({
+            'resumenCaja': resumen_caja,
             'totalSales': float(total_sales),
             'salesCount': sales_count,
             'avgTicket': float(avg_ticket),
             'salesByHour': sales_by_hour,
             'topProducts': top_products,
-            'breakdownByPayment': breakdown_by_payment,
-            'ventas': ventas_list
+            'ventas': ventas_list,
+            'gastos': gastos_list
         })
     except Exception as e:
         return HttpResponseBadRequest(str(e))
@@ -640,13 +844,14 @@ def get_request_data(request):
 # Endpoint CRUD para Productos
 @csrf_exempt
 def productos_list(request):
-    if request.method == 'GET':
+    # Solo admin/dueno pueden modificar, cajero solo lectura
+    if request.method in ['GET', 'HEAD', 'OPTIONS']:
         productos = Producto.objects.select_related('categoria').all()
         productos_list = []
         for p in productos:
             productos_list.append({
                 'id': p.id,
-                'codigo_producto': p.id,  # No existe campo, se usa id como código
+                'codigo_producto': p.id,
                 'codigo_barra': p.codigo_barra,
                 'nombre': p.nombre,
                 'descripcion': p.descripcion,
@@ -662,22 +867,25 @@ def productos_list(request):
                 'fecha_vencimiento': p.fecha_vencimiento.isoformat() if getattr(p, 'fecha_vencimiento', None) else '',
             })
         return JsonResponse(productos_list, safe=False)
-    elif request.method == 'POST':
-        try:
-            data = get_request_data(request)
-            serializer = ProductoSerializer(data=data)
-            if serializer.is_valid():
-                producto = serializer.save()
-                return JsonResponse({
-                    'id': producto.id,
-                    'codigo_barra': producto.codigo_barra
-                }, status=201)
-            else:
-                return HttpResponseBadRequest(serializer.errors)
-        except Exception as e:
-            return HttpResponseBadRequest(str(e))
+    elif request.user.is_authenticated and getattr(request.user, 'rol', None) in ['admin', 'dueno']:
+        if request.method == 'POST':
+            try:
+                data = get_request_data(request)
+                serializer = ProductoSerializer(data=data)
+                if serializer.is_valid():
+                    producto = serializer.save()
+                    return JsonResponse({
+                        'id': producto.id,
+                        'codigo_barra': producto.codigo_barra
+                    }, status=201)
+                else:
+                    return HttpResponseBadRequest(serializer.errors)
+            except Exception as e:
+                return HttpResponseBadRequest(str(e))
+        else:
+            return HttpResponseNotAllowed(['GET', 'POST'])
     else:
-        return HttpResponseNotAllowed(['GET', 'POST'])
+        return JsonResponse({'error': 'No autorizado.'}, status=403)
 
 # Endpoint CRUD para detalle de Producto
 @csrf_exempt
@@ -687,7 +895,7 @@ def producto_detail(request, pk):
     except Producto.DoesNotExist:
         return JsonResponse({'error': 'Producto no encontrado'}, status=404)
 
-    if request.method == 'GET':
+    if request.method in ['GET', 'HEAD', 'OPTIONS']:
         return JsonResponse({
             'id': producto.id,
             'nombre': producto.nombre,
@@ -700,38 +908,43 @@ def producto_detail(request, pk):
             'unidad_medida': producto.unidad_medida,
             'creado_en': producto.creado_en,
         })
-    elif request.method == 'PUT':
-        try:
-            data = get_request_data(request)
-            producto.nombre = data.get('nombre', producto.nombre)
-            producto.descripcion = data.get('descripcion', producto.descripcion)
-            producto.categoria_id = data.get('categoria', producto.categoria_id)
-            producto.precio_compra = data.get('precio_compra', producto.precio_compra)
-            producto.precio_venta = data.get('precio_venta', producto.precio_venta)
-            producto.stock_actual = data.get('stock_actual', producto.stock_actual)
-            producto.stock_minimo = data.get('stock_minimo', producto.stock_minimo)
-            producto.unidad_medida = data.get('unidad_medida', producto.unidad_medida)
-            # Normaliza y valida codigo_barra si viene en el request
-            if 'codigo_barra' in data:
-                nuevo_codigo = data.get('codigo_barra', producto.codigo_barra)
-                if isinstance(nuevo_codigo, str):
-                    nuevo_codigo = nuevo_codigo.strip().lower()
-                # Verifica unicidad excluyendo el propio producto
-                if Producto.objects.filter(codigo_barra__iexact=nuevo_codigo).exclude(pk=producto.pk).exists():
-                    return HttpResponseBadRequest('El código de barras ya existe en otro producto.')
-                producto.codigo_barra = nuevo_codigo
-            producto.save()
+    elif request.user.is_authenticated and getattr(request.user, 'rol', None) in ['admin', 'dueno']:
+        if request.method == 'PUT':
+            try:
+                data = get_request_data(request)
+                producto.nombre = data.get('nombre', producto.nombre)
+                producto.descripcion = data.get('descripcion', producto.descripcion)
+                producto.categoria_id = data.get('categoria', producto.categoria_id)
+                producto.precio_compra = data.get('precio_compra', producto.precio_compra)
+                producto.precio_venta = data.get('precio_venta', producto.precio_venta)
+                producto.stock_actual = data.get('stock_actual', producto.stock_actual)
+                producto.stock_minimo = data.get('stock_minimo', producto.stock_minimo)
+                producto.unidad_medida = data.get('unidad_medida', producto.unidad_medida)
+                # Normaliza y valida codigo_barra si viene en el request
+                if 'codigo_barra' in data:
+                    nuevo_codigo = data.get('codigo_barra', producto.codigo_barra)
+                    if isinstance(nuevo_codigo, str):
+                        nuevo_codigo = nuevo_codigo.strip().lower()
+                    # Verifica unicidad excluyendo el propio producto
+                    if Producto.objects.filter(codigo_barra__iexact=nuevo_codigo).exclude(pk=producto.pk).exists():
+                        return HttpResponseBadRequest('El código de barras ya existe en otro producto.')
+                    producto.codigo_barra = nuevo_codigo
+                producto.save()
+                return JsonResponse({'ok': True})
+            except Exception as e:
+                return HttpResponseBadRequest(str(e))
+        elif request.method == 'DELETE':
+            producto.delete()
             return JsonResponse({'ok': True})
-        except Exception as e:
-            return HttpResponseBadRequest(str(e))
-    elif request.method == 'DELETE':
-        producto.delete()
-        return JsonResponse({'ok': True})
+        else:
+            return HttpResponseNotAllowed(['GET', 'PUT', 'DELETE'])
     else:
-        return HttpResponseNotAllowed(['GET', 'PUT', 'DELETE'])
+        return JsonResponse({'error': 'No autorizado.'}, status=403)
 # Entidad 5: Usuario
 # =============================
+from rest_framework.decorators import permission_classes as drf_permission_classes
 @csrf_exempt
+@drf_permission_classes([IsAdmin | IsDueno])
 def usuarios_list(request):
     if request.method == 'GET':
         usuarios = Usuario.objects.all().values('id', 'username', 'rol', 'creado_en')
@@ -753,6 +966,7 @@ def usuarios_list(request):
     return JsonResponse({'error': 'Método no permitido.'}, status=405)
 
 @csrf_exempt
+@drf_permission_classes([IsAdmin | IsDueno])
 def usuario_detail(request, pk):
     if request.method == 'GET':
         try:
@@ -903,6 +1117,7 @@ def proveedor_detail(request, pk):
 # ---- Venta ----
 # Endpoint CRUD para Ventas
 @csrf_exempt
+@drf_permission_classes([IsAdmin | IsDueno | IsCajero])
 def ventas_list(request):
     if request.method == 'GET':
         ventas = list(Venta.objects.values())
@@ -924,6 +1139,7 @@ def ventas_list(request):
                     total_venta=0,  # Se actualizará después
                     metodo_pago=data.get('metodo_pago', ''),
                     usuario_id=data.get('usuario_id'),
+                    maquina_id=data.get('maquina'),  # <--- AGREGADO
                 )
                 for detalle in detalles:
                     producto_id = detalle.get('producto')

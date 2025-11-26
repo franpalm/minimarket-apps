@@ -45,3 +45,14 @@ Cannot add or update a child row: a foreign key constraint fails (`minimarket-ap
 )
 SELECT id, nombre FROM api_proveedor;
 SELECT id, nombre FROM api_proveedor;
+
+categorias && categorias.find(cat => String(cat.id) === String(product.id_categoria))?.nombre_categoria || 'N/A'
+
+
+
+
+INSERT INTO api_maquina (id, nombre)
+VALUES
+  (1, 'Tuu'),
+  (2, 'Compraqui')
+ON DUPLICATE KEY UPDATE nombre=VALUES(nombre);

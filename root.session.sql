@@ -32,3 +32,4 @@ VALUES (
 SELECT * FROM api_producto;
 
 SHOW TABLES;
+

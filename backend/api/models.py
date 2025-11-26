@@ -1,5 +1,27 @@
-# Categoría de Gasto
 from django.db import models
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+from django.utils import timezone
+from django.db import models
+from django.conf import settings
+
+# ...existing code...
+
+class Caja(models.Model):
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    maquina = models.ForeignKey('Maquina', on_delete=models.CASCADE, null=True, blank=True)
+    fecha_inicio = models.DateTimeField(auto_now_add=True)
+    monto_inicial = models.DecimalField(max_digits=12, decimal_places=2)
+    fecha_cierre = models.DateTimeField(null=True, blank=True)
+    monto_final = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    estado = models.CharField(max_length=10, choices=[('abierta', 'Abierta'), ('cerrada', 'Cerrada')], default='abierta')
+    observaciones = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Caja {self.id} - {self.usuario} - {self.estado}"
+# Categoría de Gasto
 
 class CategoriaGasto(models.Model):
     nombre = models.CharField(max_length=100, unique=True)
@@ -7,17 +29,14 @@ class CategoriaGasto(models.Model):
 
     def __str__(self):
         return self.nombre
-from django.db import models
-from django.contrib.auth.models import AbstractUser
-from django.db.models.signals import post_save, post_delete
-from django.dispatch import receiver
-from django.utils import timezone
+
 
 class Usuario(AbstractUser):
     ROLES = (
-        ('admin', 'Administrador'),
-        ('usuario', 'Usuario'),
+        ('admin', 'administrador'),
+        ('dueno', 'Dueño'),
         ('cajero', 'Cajero'),
+        ('usuario', 'Usuario'),
     )
     rol = models.CharField(max_length=20, choices=ROLES, default='usuario')
     activo = models.BooleanField(default=True)
@@ -85,9 +104,14 @@ class Venta(models.Model):
     creado_en = models.DateTimeField(auto_now_add=True)
     terminal_transaction_id = models.CharField(max_length=100, blank=True, null=True)
     terminal_response = models.JSONField(blank=True, null=True)
+    maquina = models.ForeignKey('Maquina', on_delete=models.SET_NULL, null=True, blank=True, help_text="Máquina asociada: Tuu o Compraqui")
+    folio = models.PositiveIntegerField(null=True, blank=True, help_text="Folio incremental por máquina")
+
+    class Meta:
+        unique_together = ('maquina', 'folio')
 
     def __str__(self):
-        return f"Venta {self.id} - {self.total_venta}"
+        return f"Venta {self.id} - {self.total_venta} - {self.maquina.nombre if self.maquina else 'Sin máquina'} - Folio {self.folio if self.folio else '-'}"
 
 # =============================
 # Modelos extra para el proyecto
@@ -125,6 +149,16 @@ class Gasto(models.Model):
 
     def __str__(self):
         return f"Gasto {self.id} - {self.monto}"
+class Maquina(models.Model):
+    NOMBRES = (
+        ("tuu", "Tuu"),
+        ("compraqui", "Compraqui"),
+    )
+    nombre = models.CharField(max_length=20, choices=NOMBRES, unique=True)
+    descripcion = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return self.get_nombre_display()
 
 # Modelo para Compra (EXTRA)
 class Compra(models.Model):
@@ -132,9 +166,10 @@ class Compra(models.Model):
     proveedor = models.ForeignKey(Proveedor, on_delete=models.SET_NULL, null=True)
     total_compra = models.DecimalField(max_digits=12, decimal_places=2)
     usuario = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True)
+    maquina = models.ForeignKey('Maquina', on_delete=models.SET_NULL, null=True, blank=True, help_text="Máquina asociada: Tuu o Compraqui")
 
     def __str__(self):
-        return f"Compra {self.id} - {self.total_compra}"
+        return f"Compra {self.id} - {self.total_compra} - {self.maquina.nombre if self.maquina else 'Sin máquina'}"
 
 # Modelo para DetalleCompra (EXTRA)
 class DetalleCompra(models.Model):

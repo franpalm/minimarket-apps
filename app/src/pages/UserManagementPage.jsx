@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import authFetch from '../utils/authFetch';
 
 function ConfirmModal({ open, onClose, onConfirm, title, children }) {
   if (!open) return null;
@@ -33,7 +34,7 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     if (user && user.rol === 'admin') {
-      fetch('/api/usuarios/')
+      authFetch('/api/usuarios/')
         .then(res => res.json())
         .then(data => setUsuarios(data));
     }
@@ -60,7 +61,7 @@ export default function UserManagementPage() {
   const handleSubmit = async e => {
     e.preventDefault();
     setLoading(true);
-    await fetch('/api/usuarios/', {
+    await authFetch('/api/usuarios/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form)
@@ -81,7 +82,7 @@ export default function UserManagementPage() {
   const handleEditSubmit = async e => {
     e.preventDefault();
     setLoading(true);
-    await fetch(`/api/usuarios/${editUser.id}/`, {
+    await authFetch(`/api/usuarios/${editUser.id}/`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form)
@@ -101,7 +102,7 @@ export default function UserManagementPage() {
 
   const handleDeleteConfirm = async () => {
     setLoading(true);
-    await fetch(`/api/usuarios/${deleteUser.id}/`, { method: 'DELETE' });
+    await authFetch(`/api/usuarios/${deleteUser.id}/`, { method: 'DELETE' });
     setLoading(false);
     setDeleteUser(null);
     setModalOpen(false);
@@ -113,7 +114,7 @@ export default function UserManagementPage() {
   // Mover la función handleForceRecovery fuera del render
   const handleForceRecovery = async (usuario) => {
     setLoading(true);
-    const res = await fetch(`/api/usuarios/${usuario.id}/forzar_recuperacion/`, { method: 'POST' });
+    const res = await authFetch(`/api/usuarios/${usuario.id}/forzar_recuperacion/`, { method: 'POST' });
     setLoading(false);
     if (res.ok) {
       alert(`Email de recuperación enviado a ${usuario.email}`);

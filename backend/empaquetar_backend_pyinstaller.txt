@@ -1,0 +1,13 @@
+# Script para empaquetar el backend Django con PyInstaller
+# 1. Instala PyInstaller si no lo tienes:
+#    pip install pyinstaller
+# 2. Ejecuta este comando en la carpeta backend:
+#    pyinstaller --onefile manage.py
+# 3. El ejecutable estará en dist/manage.exe
+# 4. Modifica el main.js de Electron para lanzar el ejecutable en vez de 'python manage.py runserver'
+
+# Ejemplo de comando para Windows:
+pyinstaller --onefile --name minimarket-backend --add-data "db.sqlite3;." manage.py
+
+# Si usas MariaDB, no incluyas --add-data para la base de datos.
+# Puedes agregar otros archivos estáticos o de configuración si es necesario.

@@ -1,5 +1,20 @@
+
+
 import React, { useState, useEffect, useCallback } from 'react';
+import authFetch from '../utils/authFetch';
 import useScanDetection from '../hooks/useScanDetection';
+import ErrorBoundary from '../components/ErrorBoundary';
+import ProductList from '../components/sales/ProductList';
+import RegistryPanel from '../components/sales/RegistryPanel';
+import PaymentModal from '../components/sales/PaymentModal';
+import ToastContainer from '../components/sales/ToastContainer';
+import Modal from '../components/sales/Modal';
+
+// Opciones de máquinas (puedes cargar dinámicamente si lo prefieres)
+const MAQUINAS = [
+  { id: 1, nombre: 'Tuu' },
+  { id: 2, nombre: 'Compraqui' },
+];
 
 // Sonidos
 const beepUrl = '/sounds/beep.mp3';
@@ -15,14 +30,99 @@ function playSound(url) {
   }
 }
 
-import ErrorBoundary from '../components/ErrorBoundary';
-import ProductList from '../components/sales/ProductList';
-import RegistryPanel from '../components/sales/RegistryPanel';
-import PaymentModal from '../components/sales/PaymentModal';
-import ToastContainer from '../components/sales/ToastContainer';
-import Modal from '../components/sales/Modal';
-
 export default function SalesPage() {
+
+
+  // Máquina activa (por defecto la primera)
+  const [maquinaId, setMaquinaId] = useState(MAQUINAS[0].id);
+  const [products, setProducts] = useState([]);
+  const [cartItems, setCartItems] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isProcessingSale, setIsProcessingSale] = useState(false);
+  const [pendingClearCart, setPendingClearCart] = useState(false);
+
+  // --- Estado de caja ---
+  const [caja, setCaja] = useState(null);
+  const [cajaResumen, setCajaResumen] = useState(null);
+  const [showCajaModal, setShowCajaModal] = useState(false);
+  const [montoInicial, setMontoInicial] = useState('');
+  const [montoFinal, setMontoFinal] = useState('');
+  const [cargandoCaja, setCargandoCaja] = useState(false);
+
+  // Consultar si hay caja abierta al cargar
+  useEffect(() => {
+    async function fetchCaja() {
+      setCargandoCaja(true);
+      try {
+        const res = await authFetch(`http://localhost:8000/api/cajas/?maquina=${maquinaId}`);
+        if (res.ok) {
+          const data = await res.json();
+          const abierta = data.find(c => c.estado === 'abierta');
+          setCaja(abierta || null);
+        }
+      } catch {}
+      setCargandoCaja(false);
+    }
+    fetchCaja();
+  }, [maquinaId]);
+
+  // Iniciar caja
+  const handleAbrirCaja = async () => {
+    if (!montoInicial || isNaN(Number(montoInicial))) {
+      showToast('Error', 'Ingrese un monto inicial válido', 'error');
+      return;
+    }
+    setCargandoCaja(true);
+    try {
+      const res = await authFetch('http://localhost:8000/api/cajas/abrir/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maquina: maquinaId, monto_inicial: montoInicial })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCaja(data);
+        setShowCajaModal(false);
+        showToast('Caja abierta', 'Caja iniciada correctamente', 'success');
+      } else {
+        const err = await res.json();
+        showToast('Error', err.error || 'No se pudo abrir caja', 'error');
+      }
+    } catch {
+      showToast('Error', 'No se pudo abrir caja', 'error');
+    }
+    setCargandoCaja(false);
+  };
+
+  // Cerrar caja
+  const handleCerrarCaja = async () => {
+    if (!montoFinal || isNaN(Number(montoFinal))) {
+      showToast('Error', 'Ingrese un monto final válido', 'error');
+      return;
+    }
+    setCargandoCaja(true);
+    try {
+      const res = await authFetch(`http://localhost:8000/api/cajas/${caja.id}/cerrar/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monto_final: montoFinal })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Resumen de caja recibido:', data.resumen); // <-- LOG PARA DEPURAR
+        setCaja(null);
+        setCajaResumen(data.resumen);
+        showToast('Caja cerrada', 'Caja cerrada correctamente', 'success');
+      } else {
+        const err = await res.json();
+        showToast('Error', err.error || 'No se pudo cerrar caja', 'error');
+      }
+    } catch (e) {
+      showToast('Error', 'No se pudo cerrar caja', 'error');
+    }
+    setCargandoCaja(false);
+  };
   // Lógica de escáner
   useScanDetection(async (codigo) => {
     try {
@@ -30,12 +130,8 @@ export default function SalesPage() {
       let producto = products.find(p => p.codigo_barra === codigo);
       // Si no está en el array local, intentar buscar en la API
       if (!producto) {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`http://localhost:8000/api/productos-rest/?codigo_barra=${codigo}`, {
-          headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
-            'Content-Type': 'application/json'
-          }
+        const res = await authFetch(`http://localhost:8000/api/productos-rest/?codigo_barra=${codigo}`, {
+          headers: { 'Content-Type': 'application/json' }
         });
         if (res.ok) {
           const data = await res.json();
@@ -67,12 +163,7 @@ export default function SalesPage() {
     }
   });
 
-  const [pendingClearCart, setPendingClearCart] = useState(false);
-  const [products, setProducts] = useState([]);
-  const [cartItems, setCartItems] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isProcessingSale, setIsProcessingSale] = useState(false);
+
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -95,12 +186,8 @@ export default function SalesPage() {
 
   const loadProducts = useCallback(() => {
     setIsLoading(true);
-    const token = localStorage.getItem('token');
-    fetch('http://localhost:8000/api/productos-rest/', {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json'
-      }
+    authFetch('http://localhost:8000/api/productos-rest/', {
+      headers: { 'Content-Type': 'application/json' }
     })
       .then(res => res.json())
       .then(data => {
@@ -224,19 +311,26 @@ export default function SalesPage() {
         monto_total: cartTotal,
         monto_recibido: cashReceived || cartTotal,
         vuelto: changeDue || 0,
-        intent_id: intentId
+        intent_id: intentId,
+        maquina: maquinaId // Enviar el id de la máquina activa
       };
 
       if (terminalResult) {
          payload.informacion_terminal = { ...terminalResult };
       }
 
-      const response = await fetch('http://localhost:8000/api/ventas/', {
+      const response = await authFetch('http://localhost:8000/api/ventas/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       const result = await response.json();
+
+      if (response.status === 400 && result?.error === 'NO_CAJA_ABIERTA') {
+        showToast('Caja cerrada', result?.message || 'Debe abrir una caja para este usuario y máquina antes de registrar una venta.', 'error');
+        setIsProcessingSale(false);
+        return;
+      }
 
       if (response.ok && result.id) {
         showToast('Venta Completada', 'Pago realizado con éxito', 'success');
@@ -275,9 +369,91 @@ export default function SalesPage() {
               <img src="/logo192.png" alt="Logo" className="w-12 h-12 object-contain" />
               <span className="ml-3 font-bold text-2xl text-gray-700">MiniMarket Pro</span>
             </div>
-            <h1 className="text-lg font-bold text-gray-600">POS Ventas</h1>
+            <div className="flex items-center gap-4">
+              <h1 className="text-lg font-bold text-gray-600">POS Ventas</h1>
+              <select
+                className="ml-4 px-2 py-1 border rounded text-blue-700 font-semibold"
+                value={maquinaId}
+                onChange={e => setMaquinaId(Number(e.target.value))}
+                style={{ minWidth: 120 }}
+              >
+                {MAQUINAS.map(m => (
+                  <option key={m.id} value={m.id}>{m.nombre}</option>
+                ))}
+              </select>
+              {/* Botón de caja */}
+              {cargandoCaja ? (
+                <span className="ml-4 text-gray-500">Cargando caja...</span>
+              ) : caja ? (
+                <button
+                  className="ml-4 px-3 py-1 bg-red-600 text-white rounded font-semibold hover:bg-red-700"
+                  onClick={() => setShowCajaModal('cerrar')}
+                >
+                  Cerrar Caja
+                </button>
+              ) : (
+                <button
+                  className="ml-4 px-3 py-1 bg-green-600 text-white rounded font-semibold hover:bg-green-700"
+                  onClick={() => setShowCajaModal('abrir')}
+                >
+                  Iniciar Caja
+                </button>
+              )}
+            </div>
           </div>
         </header>
+      {/* Modal de inicio/cierre de caja */}
+      {showCajaModal && (
+        <Modal
+          key="caja-modal"
+          show={true}
+          title={showCajaModal === 'abrir' ? 'Iniciar Caja' : 'Cerrar Caja'}
+          message={showCajaModal === 'abrir' ? (
+            <div>
+              <label className="block mb-2">Monto inicial:</label>
+              <input
+                type="number"
+                className="border rounded px-2 py-1 w-full"
+                value={montoInicial}
+                onChange={e => setMontoInicial(e.target.value)}
+                min={0}
+              />
+              <div className="mt-1 text-sm text-gray-500">{montoInicial ? `CLP ${Number(montoInicial).toLocaleString('es-CL')}` : ''}</div>
+            </div>
+          ) : (
+            <div>
+              <label className="block mb-2">Monto final contado:</label>
+              <input
+                type="number"
+                className="border rounded px-2 py-1 w-full"
+                value={montoFinal}
+                onChange={e => setMontoFinal(e.target.value)}
+                min={0}
+              />
+            </div>
+          )}
+          onConfirm={showCajaModal === 'abrir' ? handleAbrirCaja : handleCerrarCaja}
+          onCancel={() => setShowCajaModal(false)}
+        />
+      )}
+
+      {/* Resumen de caja al cierre */}
+      {cajaResumen && (
+        <div className="max-w-2xl mx-auto my-6 p-4 border rounded bg-green-50">
+          <h2 className="font-bold text-lg mb-2 text-green-800">Resumen de Caja</h2>
+          <pre className="bg-gray-100 text-xs p-2 rounded mb-2 text-gray-700">{JSON.stringify(cajaResumen, null, 2)}</pre>
+          <ul className="space-y-1">
+            <li>Total ventas: <span className="font-semibold">{formatPrice(cajaResumen.ventas_total)}</span></li>
+            <li>Ventas efectivo: <span className="font-semibold">{formatPrice(cajaResumen.ventas_efectivo)}</span></li>
+            <li>Ventas terminal: <span className="font-semibold">{formatPrice(cajaResumen.ventas_terminal)}</span></li>
+            <li>Gastos: <span className="font-semibold">{formatPrice(cajaResumen.gastos)}</span></li>
+            <li>Diferencia: <span className="font-semibold">{formatPrice(cajaResumen.diferencia)}</span></li>
+          </ul>
+          {Object.values(cajaResumen).every(v => v === 0) && (
+            <div className="text-red-600 mt-2 font-semibold">ADVERTENCIA: El backend devolvió todos los valores en cero. Verifica los filtros de usuario, máquina y fechas en el backend.</div>
+          )}
+        </div>
+      )}
 
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-col md:flex-row gap-6">
@@ -312,6 +488,7 @@ export default function SalesPage() {
                   handleCancelSale={handleCancelSale}
                   paymentMethod={paymentMethod}
                   setPaymentMethod={setPaymentMethod}
+                  cajaAbierta={!!caja}
                 />
               </ErrorBoundary>
             </div>

@@ -1,8 +1,45 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const { spawn } = require('child_process');
+let djangoProcess = null;
+
 
 function createWindow() {
     console.log('ELECTRON_DEV:', process.env.ELECTRON_DEV); // <-- Depuración
+
+    // Inicia el backend Django como proceso hijo
+    if (!djangoProcess) {
+        const isDev = process.env.ELECTRON_DEV === 'true';
+        const backendPath = path.join(__dirname, '../');
+        if (isDev) {
+            // Desarrollo: usa Python normal
+            const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+            djangoProcess = spawn(pythonCmd, ['manage.py', 'runserver', '127.0.0.1:8000'], {
+                cwd: backendPath,
+                shell: true,
+                detached: false
+            });
+        } else {
+            // Producción: ejecuta el backend empaquetado (minimarket-backend.exe)
+            const backendExe = process.platform === 'win32'
+                ? path.join(backendPath, 'dist', 'minimarket-backend.exe')
+                : path.join(backendPath, 'dist', 'minimarket-backend');
+            djangoProcess = spawn(backendExe, [], {
+                cwd: backendPath,
+                shell: true,
+                detached: false
+            });
+        }
+        djangoProcess.stdout.on('data', (data) => {
+            console.log(`[Django] ${data}`);
+        });
+        djangoProcess.stderr.on('data', (data) => {
+            console.error(`[Django ERROR] ${data}`);
+        });
+        djangoProcess.on('close', (code) => {
+            console.log(`[Django] proceso terminado con código ${code}`);
+        });
+    }
 
     const win = new BrowserWindow({
         width: 1200,
@@ -30,6 +67,7 @@ function createWindow() {
     }
 }
 
+
 app.whenReady().then(() => {
     createWindow();
     app.on('activate', () => {
@@ -37,6 +75,11 @@ app.whenReady().then(() => {
     });
 });
 
+
 app.on('window-all-closed', () => {
+    if (djangoProcess) {
+        djangoProcess.kill();
+        djangoProcess = null;
+    }
     if (process.platform !== 'darwin') app.quit();
 });

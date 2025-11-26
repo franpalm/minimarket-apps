@@ -1,7 +1,13 @@
+// Opciones de máquinas (puedes cargar dinámicamente si lo prefieres)
+const MAQUINAS = [
+  { id: 1, nombre: 'Tuu' },
+  { id: 2, nombre: 'Compraqui' },
+];
 import React, { useState, useEffect } from 'react';
+import authFetch from '../utils/authFetch';
 import ReportFilters from '../components/Report/ReportFilters';
 import PulsoDelDia from '../components/Report/Dia/PulsoDelDia';
-import InformeSemanal from '../components/Report/Semana/InformeSemanl';
+import InformeSemanal from '../components/Report/Semana/InformeSemanal';
 import InformeMensual from '../components/Report/Mes/InformeMensual';
 import AnalisisProducto from '../components/Report/Analisis_Producto/AnalisisProducto';
 
@@ -36,11 +42,14 @@ function ReportsPage() {
     monthInput: '', // string 'YYYY-MM' para el input
     category: '',
     topN: '5',
-    payment: ''
+    payment: '',
+    maquina: ''
   });
   const [appliedFilters, setAppliedFilters] = useState({
     ...filters
   });
+  // Máquina seleccionada para filtrar
+  const [maquinaId, setMaquinaId] = useState('');
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -98,6 +107,7 @@ function ReportsPage() {
           if (appliedFilters.payment) params.push(`payment=${appliedFilters.payment}`);
           if (appliedFilters.usuario) params.push(`usuario=${appliedFilters.usuario}`);
           if (appliedFilters.terminal_status) params.push(`terminal_status=${appliedFilters.terminal_status}`);
+          if (maquinaId) params.push(`maquina=${maquinaId}`);
           url = `http://localhost:8000/api/reportes/diario/?${params.join('&')}`;
         } else if (activeTab === 'weekly') {
           if (!appliedFilters.week) {
@@ -109,6 +119,7 @@ function ReportsPage() {
           if (appliedFilters.payment) params.push(`payment=${appliedFilters.payment}`);
           if (appliedFilters.usuario) params.push(`usuario=${appliedFilters.usuario}`);
           if (appliedFilters.terminal_status) params.push(`terminal_status=${appliedFilters.terminal_status}`);
+          if (maquinaId) params.push(`maquina=${maquinaId}`);
           url = `http://localhost:8000/api/reportes/semanal/?${params.join('&')}`;
         } else if (activeTab === 'monthly') {
           let month = appliedFilters.month;
@@ -137,7 +148,7 @@ function ReportsPage() {
           return;
         }
         if (url) {
-          const res = await fetch(url);
+          const res = await authFetch(url);
           if (!res.ok) throw new Error('Error de red o backend');
           const data = await res.json();
           console.log('Datos recibidos para', activeTab, data); // Depuración
@@ -213,7 +224,19 @@ function ReportsPage() {
       return <PulsoDelDia reportData={reportData} formatCLP={formatCLP} />;
     }
     if (activeTab === 'weekly') {
-      return <InformeSemanal reportData={reportData} formatCLP={formatCLP} />;
+      // Handler para cambiar la semana seleccionada
+      const handleWeekChange = (weekValue) => {
+        setFilters(prev => ({ ...prev, week: weekValue }));
+        setAppliedFilters(prev => ({ ...prev, week: weekValue }));
+      };
+      return (
+        <InformeSemanal
+          reportData={reportData}
+          formatCLP={formatCLP}
+          selectedWeek={filters.week}
+          onWeekChange={handleWeekChange}
+        />
+      );
     }
     if (activeTab === 'monthly') {
       // Pasar el mes y año actuales y el handler para cambiar mes
@@ -238,64 +261,24 @@ function ReportsPage() {
     if (activeTab === 'products') {
       return <AnalisisProducto reportData={reportData} resumen={reportData?.resumen || {}} formatCLP={formatCLP} />;
     }
-    return null;    
+    // Si no es ninguno de los tabs conocidos, renderiza vacío o un mensaje
+    return null;
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <i className="bi bi-bar-chart-line text-indigo-600 text-2xl mr-3"></i>
-              <h1 className="text-xl font-bold text-gray-800">Dashboard de Análisis de Negocio</h1>
-            </div>
-            <div className="hidden md:flex items-center space-x-4">
-              <button className="text-gray-500 hover:text-indigo-600">
-                <i className="bi bi-moon text-lg"></i>
-              </button>
-              <div className="relative">
-                <button className="text-gray-500 hover:text-indigo-600">
-                  <i className="bi bi-question-circle text-lg"></i>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="bg-white border-b py-4">
-        <div className="container mx-auto px-4">
-          <div className="border-b border-gray-200 mb-6">
-            <ul className="flex flex-wrap -mb-px">
-              {TAB_LIST.map(tab => (
-                <li key={tab.key} className="mr-2">
-                  <button
-                    className={`inline-block py-4 px-4 text-sm font-medium text-center border-b-2 ${activeTab === tab.key
-                      ? 'border-indigo-600 text-indigo-600'
-                      : 'text-gray-500 border-transparent hover:text-indigo-600 hover:border-indigo-600'
-                      }`}
-                    onClick={() => setActiveTab(tab.key)}
-                  >
-                    <i className={`${tab.icon} mr-2`}></i>
-                    {tab.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <ReportFilters
-            activeTab={activeTab}
-            filters={filters}
-            onChange={handleFilterChange}
-            onApply={handleApplyFilters}
-          />
-        </div>
+    <div className="container mx-auto px-4 py-6">
+      <div className="flex gap-4 mb-4">
+        {TAB_LIST.map(tab => (
+          <button
+            key={tab.key}
+            className={`px-4 py-2 rounded font-semibold border ${activeTab === tab.key ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border-blue-600'}`}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            <i className={`${tab.icon} mr-2`}></i>{tab.label}
+          </button>
+        ))}
       </div>
-
-      <div className="container mx-auto px-4 py-6">
-        {renderTabContent()}
-      </div>
+      {renderTabContent()}
     </div>
   );
 }

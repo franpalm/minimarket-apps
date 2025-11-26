@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import authFetch from '../utils/authFetch';
 import useScanDetection from '../hooks/useScanDetection';
 import { useNotification } from '../components/Notification';
 import AddProductForm from '../components/Invetory/AddProductForm';
@@ -11,7 +12,7 @@ function InventoryPage() {
 
         const loadInversionResumen = async () => {
             try {
-                const res = await fetch('http://localhost:8000/api/resumen-inversion/');
+                const res = await authFetch('http://localhost:8000/api/resumen-inversion/');
                 const data = await res.json();
                 setInversionResumen(data);
             } catch (err) {
@@ -50,15 +51,18 @@ function InventoryPage() {
     const loadProducts = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch('http://localhost:8000/api/productos-rest/', {
+            const res = await authFetch('http://localhost:8000/api/productos-rest/', {
                 headers: {
-                    'Authorization': token ? `Bearer ${token}` : '',
                     'Content-Type': 'application/json'
                 }
             });
             const data = await res.json();
-            setProducts(data);
+            // Normaliza el campo de categoría para todos los productos
+            const normalized = data.map(p => ({
+                ...p,
+                id_categoria: p.id_categoria !== undefined ? p.id_categoria : (p.categoria_id !== undefined ? p.categoria_id : (p.categoria !== undefined ? p.categoria : undefined))
+            }));
+            setProducts(normalized);
         } catch (err) {
             console.error("Error al cargar productos en frontend:", err);
             showNotification('Error al cargar productos', 'danger');
@@ -69,7 +73,7 @@ function InventoryPage() {
 
     const loadCategories = async () => {
         try {
-            const res = await fetch('http://localhost:8000/api/categorias/');
+            const res = await authFetch('http://localhost:8000/api/categorias/');
             const data = await res.json();
             const mappedCategories = data.map(cat => ({
                 id: cat.id,
@@ -87,11 +91,9 @@ function InventoryPage() {
     const handleUpdateProduct = async (updatedProduct) => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`http://localhost:8000/api/productos-rest/${updatedProduct.id}/`, {
+            const res = await authFetch(`http://localhost:8000/api/productos-rest/${updatedProduct.id}/`, {
                 method: 'PUT',
                 headers: {
-                    'Authorization': token ? `Bearer ${token}` : '',
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(updatedProduct)
@@ -99,9 +101,8 @@ function InventoryPage() {
             if (res.ok) {
                 showNotification('Se han guardado los cambios', 'success');
                 // Recargar productos desde el endpoint REST para reflejar el cambio
-                const productosRes = await fetch('http://localhost:8000/api/productos-rest/', {
+                const productosRes = await authFetch('http://localhost:8000/api/productos-rest/', {
                     headers: {
-                        'Authorization': token ? `Bearer ${token}` : '',
                         'Content-Type': 'application/json'
                     }
                 });
@@ -127,7 +128,7 @@ function InventoryPage() {
         }
         setLoading(true);
         try {
-            const res = await fetch('http://localhost:8000/api/categorias/', {
+            const res = await authFetch('http://localhost:8000/api/categorias/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -154,7 +155,7 @@ function InventoryPage() {
     const handleDeleteCategory = async (categoryId) => {
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:8000/api/categorias/${categoryId}/`, {
+            const res = await authFetch(`http://localhost:8000/api/categorias/${categoryId}/`, {
                 method: 'DELETE'
             });
             if (res.ok) {
@@ -178,7 +179,7 @@ function InventoryPage() {
         if (window.confirm(`¿Estás seguro de que quieres eliminar el producto con ID ${productId}?`)) {
             setLoading(true);
             try {
-                const res = await fetch(`http://localhost:8000/api/productos/${productId}/`, {
+                const res = await authFetch(`http://localhost:8000/api/productos/${productId}/`, {
                     method: 'DELETE'
                 });
                 if (res.ok) {

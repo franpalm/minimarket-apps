@@ -1,3 +1,18 @@
+# --- Caja Serializer ---
+from .models import Caja
+
+from rest_framework import serializers
+
+class CajaSerializer(serializers.ModelSerializer):
+    usuario_nombre = serializers.CharField(source='usuario.username', read_only=True)
+    maquina_nombre = serializers.CharField(source='maquina.nombre', read_only=True)
+
+    class Meta:
+        model = Caja
+        fields = [
+            'id', 'usuario', 'usuario_nombre', 'maquina', 'maquina_nombre',
+            'fecha_inicio', 'monto_inicial', 'fecha_cierre', 'monto_final', 'estado', 'observaciones'
+        ]
 from rest_framework import serializers
 from .models import CategoriaGasto
 
@@ -55,9 +70,11 @@ class DetalleCompraSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class VentaSerializer(serializers.ModelSerializer):
+    maquina_nombre = serializers.CharField(source='maquina.nombre', read_only=True)
     class Meta:
         model = Venta
         fields = '__all__'
+        read_only_fields = ('folio',)
 
 class DetalleVentaSerializer(serializers.ModelSerializer):
     class Meta:

@@ -1,5 +1,6 @@
 import React, { useState, useImperativeHandle, forwardRef } from 'react';
 import { useNotification } from '../../components/Notification';
+import authFetch from '../../utils/authFetch';
 
 function formatCLP(value) {
   if (value === '' || value === null || value === undefined) return '';
@@ -26,8 +27,11 @@ const AddProductForm = forwardRef(({ onProductAdded, categories }, ref) => {
   const [products, setProducts] = useState([]);
   // Cargar productos para validar unicidad (y refrescar tras agregar)
   const fetchProducts = () => {
-    fetch('http://localhost:8000/api/productos/')
-      .then(res => res.json())
+    authFetch('http://localhost:8000/api/productos-rest/')
+      .then(res => {
+        if (!res.ok) throw new Error('No autorizado');
+        return res.json();
+      })
       .then(data => setProducts(data))
       .catch(() => setProducts([]));
   };
@@ -58,7 +62,8 @@ const AddProductForm = forwardRef(({ onProductAdded, categories }, ref) => {
           return;
         }
         // Validar unicidad en frontend (case-insensitive)
-        if (products.some(p => (p.codigo_barra || '').trim().toLowerCase() === form.codigo_barra.trim().toLowerCase())) {
+        const productsArray = Array.isArray(products) ? products : [];
+        if (productsArray.some(p => (p.codigo_barra || '').trim().toLowerCase() === form.codigo_barra.trim().toLowerCase())) {
           showNotification('El código de barras ya existe. Debe ser único.', 'danger');
           return;
         }
@@ -74,7 +79,7 @@ const AddProductForm = forwardRef(({ onProductAdded, categories }, ref) => {
             codigo_barra: form.codigo_barra,
             nombre: form.nombre,
             descripcion: form.descripcion,
-            categoria: parseInt(form.id_categoria),
+            categoria: parseInt(form.id_categoria), // El backend espera 'categoria'
             proveedor: form.id_proveedor ? parseInt(form.id_proveedor) : null,
             precio_compra: parseCLP(form.precio_compra),
             precio_venta: parseCLP(form.precio_venta),
@@ -83,9 +88,12 @@ const AddProductForm = forwardRef(({ onProductAdded, categories }, ref) => {
             unidad_medida: form.unidad_medida,
             fecha_vencimiento: form.fecha_vencimiento || null
           };
-          const res = await fetch('http://localhost:8000/api/productos/', {
+          const token = localStorage.getItem('token');
+          const res = await authFetch('http://localhost:8000/api/productos-rest/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json'
+            },
             body: JSON.stringify(newProduct)
           });
           if (res.ok) {

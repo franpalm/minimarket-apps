@@ -1,14 +1,14 @@
 from django.urls import path
 from . import views
+from rest_framework.routers import DefaultRouter
+from .views import CajaViewSet, ProductoViewSet, CategoriaGastoViewSet
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
 
-from rest_framework.routers import DefaultRouter
-from .views import ProductoViewSet, CategoriaGastoViewSet
-
 router = DefaultRouter()
+router.register(r'cajas', CajaViewSet, basename='caja')
 router.register(r'productos-rest', ProductoViewSet, basename='productos-rest')
 router.register(r'categorias-gasto', CategoriaGastoViewSet, basename='categorias-gasto')
 
@@ -19,7 +19,7 @@ urlpatterns = [
     path('productos/', views.productos_list, name='productos_list'),
     path('productos/<int:pk>/', views.producto_detail, name='producto_detail'),
 
-    # Endpoint REST para edición completa de productos
+    # Endpoint REST para edición completa de productos y todos los viewsets
     *router.urls,
 
     path('categorias/', views.categorias_list, name='categorias_list'),
