@@ -5,7 +5,7 @@
     "@tailwindcss/postcss": "^4.1.17",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
-    "electron": "^39.2.2",
+    "electron": "^30.0.0",
     "electron-builder": "^26.0.12",
     "wait-on": "^9.0.3"
   },
@@ -18,22 +18,25 @@
     "build": "cd app && npm run build",
     "dist": "npm run build && electron-builder"
   },
-    "build": {
-      "appId": "com.minimarket.app",
-      "productName": "MinimarketApp",
-      "directories": {
-        "output": "dist"
-      },
-      "files": [
-        "app/build/**/*",
-        "minimarket-app/electron/**/*",
-        "backend/**/*",
-        "package.json"
-      ],
-      "win": {
-        "target": "nsis"
-      }
+  "build": {
+    "appId": "com.minimarket.app",
+    "productName": "MinimarketApp",
+    "directories": {
+      "output": "dist"
     },
+    "files": [
+      "app/build/**/*",
+      "app/public/electron.js",
+      "app/public/favicon.ico",
+      "minimarket-app/electron/**/*",
+      "backend/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "sign": false
+    }
+  },
   "dependencies": {
     "chart.js": "^4.5.1",
     "mercadopago": "^2.10.0",

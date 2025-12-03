@@ -1,3 +1,28 @@
+from .models import Presupuesto
+from .serializers import PresupuestoSerializer
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+
+# Endpoint para presupuesto global
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def presupuesto_global_view(request):
+    if request.method == 'GET':
+        obj = Presupuesto.objects.first()
+        if not obj:
+            obj = Presupuesto.objects.create(valor=1500000)
+        serializer = PresupuestoSerializer(obj)
+        return Response(serializer.data)
+    elif request.method == 'POST':
+        valor = request.data.get('valor')
+        obj = Presupuesto.objects.first()
+        if not obj:
+            obj = Presupuesto.objects.create(valor=valor)
+        else:
+            obj.valor = valor
+            obj.save()
+        serializer = PresupuestoSerializer(obj)
+        return Response(serializer.data)
 # --- Caja endpoints ---
 from .models import Caja
 from .serializers import CajaSerializer

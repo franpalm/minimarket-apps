@@ -33,3 +33,10 @@ SELECT * FROM api_producto;
 
 SHOW TABLES;
 
+INSERT INTO api_categoriagasto (nombre, descripcion) VALUES
+('Arriendo', 'Pago de arriendo'),
+('Servicios', 'Pago de servicios básicos'),
+('Sueldos', 'Pago de sueldos'),
+('Mercadería', 'Compra de mercadería'),
+('Transporte', 'Gastos de transporte'),
+('Otros', 'Otros gastos');

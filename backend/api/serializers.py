@@ -1,3 +1,11 @@
+from rest_framework import serializers
+from .models import Presupuesto
+
+# Presupuesto global
+class PresupuestoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Presupuesto
+        fields = ['id', 'valor', 'actualizado_en']
 # --- Caja Serializer ---
 from .models import Caja
 

@@ -1,11 +1,18 @@
-from django.db import models
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.utils import timezone
-from django.db import models
 from django.conf import settings
+
+# Modelo para Presupuesto Global
+class Presupuesto(models.Model):
+    valor = models.DecimalField(max_digits=12, decimal_places=2, default=1500000)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Presupuesto global: {self.valor}"
 
 # ...existing code...
 
@@ -21,14 +28,6 @@ class Caja(models.Model):
 
     def __str__(self):
         return f"Caja {self.id} - {self.usuario} - {self.estado}"
-# Categoría de Gasto
-
-class CategoriaGasto(models.Model):
-    nombre = models.CharField(max_length=100, unique=True)
-    descripcion = models.TextField(blank=True, null=True)
-
-    def __str__(self):
-        return self.nombre
 
 
 class Usuario(AbstractUser):
@@ -117,10 +116,9 @@ class Venta(models.Model):
 # Modelos extra para el proyecto
 # =============================
 
-# Modelo para CategoriaGasto (EXTRA)
 class CategoriaGasto(models.Model):
-    nombre = models.CharField(max_length=100)
-    descripcion = models.TextField(blank=True)
+    nombre = models.CharField(max_length=100, unique=True)
+    descripcion = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.nombre

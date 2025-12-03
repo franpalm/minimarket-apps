@@ -42,10 +42,15 @@ function InventoryPage() {
 
         useScanDetection(handleBarcodeScan);
 
+
+    // Cargar categorías primero, luego productos, para poder asociar nombre de categoría
     useEffect(() => {
-        loadProducts();
-        loadCategories();
-        loadInversionResumen();
+        const fetchAll = async () => {
+            await loadCategories();
+            await loadProducts();
+            loadInversionResumen();
+        };
+        fetchAll();
     }, []);
 
     const loadProducts = async () => {
@@ -57,11 +62,16 @@ function InventoryPage() {
                 }
             });
             const data = await res.json();
-            // Normaliza el campo de categoría para todos los productos
-            const normalized = data.map(p => ({
-                ...p,
-                id_categoria: p.id_categoria !== undefined ? p.id_categoria : (p.categoria_id !== undefined ? p.categoria_id : (p.categoria !== undefined ? p.categoria : undefined))
-            }));
+            // Normaliza el campo de categoría y asocia el nombre de la categoría
+            const normalized = data.map(p => {
+                const idCat = p.id_categoria !== undefined ? p.id_categoria : (p.categoria_id !== undefined ? p.categoria_id : (p.categoria !== undefined ? p.categoria : undefined));
+                const categoriaObj = categories.find(cat => String(cat.id) === String(idCat));
+                return {
+                    ...p,
+                    id_categoria: idCat,
+                    nombre_categoria: categoriaObj ? categoriaObj.nombre_categoria : 'N/A'
+                };
+            });
             setProducts(normalized);
         } catch (err) {
             console.error("Error al cargar productos en frontend:", err);
@@ -100,14 +110,8 @@ function InventoryPage() {
             });
             if (res.ok) {
                 showNotification('Se han guardado los cambios', 'success');
-                // Recargar productos desde el endpoint REST para reflejar el cambio
-                const productosRes = await authFetch('http://localhost:8000/api/productos-rest/', {
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                const productosData = await productosRes.json();
-                setProducts(productosData);
+                // Recargar productos y normalizar igual que en la carga inicial
+                await loadProducts();
             } else {
                 const result = await res.json();
                 showNotification(result.message || 'Error al actualizar producto', 'danger');

@@ -5,7 +5,7 @@ a = Analysis(
     ['manage.py'],
     pathex=[],
     binaries=[],
-    datas=[('db.sqlite3', '.')],
+    datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

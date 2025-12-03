@@ -1,3 +1,4 @@
+
 from django.urls import path
 from . import views
 from rest_framework.routers import DefaultRouter
@@ -13,6 +14,7 @@ router.register(r'productos-rest', ProductoViewSet, basename='productos-rest')
 router.register(r'categorias-gasto', CategoriaGastoViewSet, basename='categorias-gasto')
 
 urlpatterns = [
+    path('presupuesto-global/', views.presupuesto_global_view, name='presupuesto_global'),
     # Resumen de inversión en inventario
     path('resumen-inversion/', views.resumen_inversion_inventario, name='resumen_inversion_inventario'),
     # URLs pedidos por el profesor 

@@ -1,17 +1,18 @@
+import authFetch from '../utils/authFetch';
 const API_URL = "http://localhost:8000/api/categorias-gasto/";
 
 export async function getCategories() {
-  const response = await fetch(API_URL);
+  const response = await authFetch(API_URL);
   return response.json();
 }
 
 export async function getCategory(id) {
-  const response = await fetch(`${API_URL}${id}/`);
+  const response = await authFetch(`${API_URL}${id}/`);
   return response.json();
 }
 
 export async function createCategory(data) {
-  const response = await fetch(API_URL, {
+  const response = await authFetch(API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -20,7 +21,7 @@ export async function createCategory(data) {
 }
 
 export async function updateCategory(id, data) {
-  const response = await fetch(`${API_URL}${id}/`, {
+  const response = await authFetch(`${API_URL}${id}/`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -29,7 +30,7 @@ export async function updateCategory(id, data) {
 }
 
 export async function deleteCategory(id) {
-  const response = await fetch(`${API_URL}${id}/`, {
+  const response = await authFetch(`${API_URL}${id}/`, {
     method: "DELETE" });
   return response.json();
 }
