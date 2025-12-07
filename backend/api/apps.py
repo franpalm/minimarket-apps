@@ -8,8 +8,11 @@ class ApiConfig(AppConfig):
     def ready(self):
         from django.contrib.auth import get_user_model
         # --- CONTRASEÑA CIFRADA Y CLAVE SECRETA ---
-        encrypted_pass = b'gAAAAABlZ...REEMPLAZA_AQUI...=='  # Pega aquí la contraseña cifrada
-        key = b'REEMPLAZA_AQUI_TU_CLAVE_SECRETA'  # Pega aquí tu clave secreta
+        # Genera una clave Fernet válida con: 
+        # from cryptography.fernet import Fernet; print(Fernet.generate_key())
+        # Ejemplo:
+        key = b'FzMp9ewVy_w03Uno5esolyQOlhLAzxhzcSen_e2KoXQ='  # Clave Fernet generada
+        encrypted_pass = b'gAAAAABpNIdPSTKGLxaywo3ensBlVxAW3uI3cSpBqKuionC1B3ysAFTjY1HBXE3WO9U-yFA67DEFWsGB3eMcw9FlsGF2tCSOfA=='  # Contraseña cifrada
         try:
             fernet = Fernet(key)
             admin_pass = fernet.decrypt(encrypted_pass).decode()
