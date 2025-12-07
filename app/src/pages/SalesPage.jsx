@@ -460,11 +460,11 @@ export default function SalesPage() {
             <div className="w-full md:w-2/3">
               <ErrorBoundary>
                 <ProductList
-                  products={products.filter(p =>
+                  products={Array.isArray(products) ? products.filter(p =>
                     p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (p.codigo_producto && p.codigo_producto.toLowerCase().includes(searchTerm.toLowerCase())) ||
                     (p.codigo_barra && p.codigo_barra.toLowerCase().includes(searchTerm.toLowerCase()))
-                  )}
+                  ) : []}
                   isLoading={isLoading}
                   searchTerm={searchTerm}
                   setSearchTerm={setSearchTerm}
