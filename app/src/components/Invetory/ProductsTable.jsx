@@ -120,7 +120,7 @@ function ProductsTable({ products, loading, categoryFilter, setCategoryFilter, c
                     <th className="px-2 py-1 font-semibold border">Código Producto</th>
                     <th className="px-2 py-1 font-semibold border">Nombre</th>
                     <th className="px-2 py-1 font-semibold border">Descripción</th>
-                    <th className="px-2 py-1 font-semibold border">Precio Compra</th>
+                    <th className="px-2 py-1 font-semibold border">Precio Compra (CLP)</th>
                     <th className="px-2 py-1 font-semibold border">Precio Venta</th>
                     <th className="px-2 py-1 font-semibold border">Stock Actual</th>
                     <th className="px-2 py-1 font-semibold border">Stock Mínimo</th>
@@ -217,7 +217,7 @@ function ProductsTable({ products, loading, categoryFilter, setCategoryFilter, c
                           <td>{product.codigo_barra ? product.codigo_barra : (product.codigo_producto ? product.codigo_producto : 'N/A')}</td>
                           <td>{product.nombre}</td>
                           <td>{product.descripcion || 'N/A'}</td>
-                          <td>{formatPrice(product.precio_compra)}</td>
+                          <td>{formatPrice(Number((String(product.precio_compra).match(/\d+(?:\.\d+)?/g) || [0])[0]))}</td>
                           <td>{formatPrice(product.precio_venta)}</td>
                           <td>{formatThousands(parseInt(product.stock_actual, 10))}</td>
                           <td>{formatThousands(parseInt(product.stock_minimo, 10))}</td>

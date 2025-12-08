@@ -39,6 +39,10 @@ class Usuario(AbstractUser):
     )
     rol = models.CharField(max_length=20, choices=ROLES, default='usuario')
     activo = models.BooleanField(default=True)
+
+    @property
+    def is_active(self):
+        return self.activo
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     ultimo_acceso = models.DateTimeField(null=True, blank=True)
     recovery_token = models.CharField(max_length=64, blank=True, null=True)
@@ -81,7 +85,7 @@ class Producto(models.Model):
     descripcion = models.TextField(blank=True)
     categoria = models.ForeignKey(Categoria, on_delete=models.CASCADE)
     proveedor = models.ForeignKey(Proveedor, on_delete=models.SET_NULL, null=True, blank=True)
-    precio_compra = models.DecimalField(max_digits=10, decimal_places=2)
+    precio_compra = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     precio_venta = models.DecimalField(max_digits=10, decimal_places=2)
     stock_actual = models.IntegerField()
     stock_minimo = models.IntegerField()
@@ -89,6 +93,14 @@ class Producto(models.Model):
     fecha_vencimiento = models.DateField(null=True, blank=True)
     creado_en = models.DateTimeField(auto_now_add=True)
     codigo_barra = models.CharField(max_length=64, unique=True, null=False, blank=False)
+
+    def save(self, *args, **kwargs):
+        # Forzar precio_compra a ser numérico y en CLP
+        if isinstance(self.precio_compra, str):
+            import re
+            match = re.search(r"\d+(?:\.\d+)?", self.precio_compra)
+            self.precio_compra = float(match.group()) if match else 0
+        super().save(*args, **kwargs)
 
 
     def __str__(self):
@@ -190,5 +202,10 @@ def log_usuario_save(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=Usuario)
 def log_usuario_delete(sender, instance, **kwargs):
     detalles = f"Usuario {instance.username} ({instance.rol}) eliminado."
-    UserActionLog.objects.create(usuario=instance, accion="Eliminación", detalles=detalles)
+    # Busca un usuario admin para registrar el log
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    admin_user = User.objects.filter(rol='admin').first()
+    if admin_user:
+        UserActionLog.objects.create(usuario=admin_user, accion="Eliminación", detalles=detalles)
 

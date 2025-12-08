@@ -217,7 +217,7 @@ function InventoryPage() {
                         </div>
                     ))}
                     <div className="bg-blue-700 text-white rounded shadow px-4 py-2 font-bold">
-                        Total estimado: {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(inversionResumen.total_general)}
+                        Total estimado: {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(inversionResumen.total_estimado_general)}
                     </div>
                 </div>
             </div>

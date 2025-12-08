@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function Sidebar({ currentPage, onNavigate }) {
+function Sidebar({ currentPage, onNavigate, user }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const navItems = [
@@ -49,13 +49,16 @@ function Sidebar({ currentPage, onNavigate }) {
             height="32"
             className="rounded-full"
           />
-          <span className="font-semibold">Usuario Actual</span>
+          <span className="font-semibold">{user?.username || 'Usuario'} <span className="text-xs text-gray-300">({user?.rol || 'Sin rol'})</span></span>
           <svg className="w-4 h-4 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
         {dropdownOpen && (
-          <ul className="absolute left-6 right-6 mt-2 bg-gray-800 rounded shadow-lg py-2 z-50">
+          <ul className="absolute left-6 right-6 bottom-16 mb-2 bg-gray-800 rounded shadow-lg py-2 z-50">
+            <li>
+              <span className="block px-4 py-2 text-gray-100">{user?.username || 'Usuario'} <span className="text-xs text-gray-400">({user?.rol || 'Sin rol'})</span></span>
+            </li>
             <li>
               <a className="block px-4 py-2 text-gray-100 hover:bg-blue-600 rounded" href="#">Mi Perfil</a>
             </li>

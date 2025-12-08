@@ -46,7 +46,7 @@ function App() {
           <LoginPage onLogin={handleLogin} activarModoPrueba={activarModoPrueba} />
         ) : (
           <div className="min-h-screen flex bg-gray-100">
-            <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+            <Sidebar currentPage={currentPage} onNavigate={handleNavigate} user={JSON.parse(localStorage.getItem('user') || '{}')} />
             <main className="flex-grow p-4 ml-[250px]">
               {renderPage()}
             </main>

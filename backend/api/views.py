@@ -79,13 +79,21 @@ class CajaViewSet(viewsets.ModelViewSet):
     def abrir_caja(self, request):
         """Iniciar caja nueva"""
         user = request.user
-        maquina = request.data.get('maquina')
+        maquina_id = request.data.get('maquina')
         monto_inicial = request.data.get('monto_inicial')
-        if Caja.objects.filter(usuario=user, maquina_id=maquina, estado='abierta').exists():
+        # Validar que el ID de máquina no sea nulo y exista
+        if not maquina_id:
+            return Response({'error': 'Debe especificar una máquina válida.'}, status=400)
+        from .models import Maquina
+        try:
+            maquina_obj = Maquina.objects.get(id=maquina_id)
+        except Maquina.DoesNotExist:
+            return Response({'error': 'La máquina especificada no existe.'}, status=400)
+        if Caja.objects.filter(usuario=user, maquina_id=maquina_id, estado='abierta').exists():
             return Response({'error': 'Ya hay una caja abierta para este usuario y máquina.'}, status=400)
         caja = Caja.objects.create(
             usuario=user,
-            maquina_id=maquina,
+            maquina=maquina_obj,
             monto_inicial=monto_inicial,
             estado='abierta'
         )
@@ -186,20 +194,27 @@ def resumen_inversion_inventario(request):
         from .models import Producto, Categoria
         categorias = Categoria.objects.all()
         resumen = []
-        total_general = 0
+        total_inversion_general = 0
+        total_estimado_general = 0
         for cat in categorias:
-            total_cat = Producto.objects.filter(categoria=cat, stock_actual__gt=0).aggregate(
+            inversion_cat = Producto.objects.filter(categoria=cat, stock_actual__gt=0).aggregate(
                 inversion=Sum(F('precio_compra') * F('stock_actual'))
             )["inversion"] or 0
+            estimado_cat = Producto.objects.filter(categoria=cat, stock_actual__gt=0).aggregate(
+                estimado=Sum(F('precio_venta') * F('stock_actual'))
+            )["estimado"] or 0
             resumen.append({
                 "categoria_id": cat.id,
                 "categoria": cat.nombre,
-                "total_inversion": float(total_cat)
+                "total_inversion": float(inversion_cat),
+                "total_estimado": float(estimado_cat)
             })
-            total_general += float(total_cat)
+            total_inversion_general += float(inversion_cat)
+            total_estimado_general += float(estimado_cat)
         return JsonResponse({
             "resumen": resumen,
-            "total_general": total_general
+            "total_inversion_general": total_inversion_general,
+            "total_estimado_general": total_estimado_general
         })
     except Exception as e:
         return HttpResponseBadRequest(str(e))

@@ -24,6 +24,8 @@ const LoginPage = ({ onLogin, activarModoPrueba }) => {
           sessionStorage.setItem('refresh_token', data.refresh);
           localStorage.setItem('token', data.access);
           localStorage.setItem('refresh_token', data.refresh);
+          // Guardar usuario actual
+          localStorage.setItem('user', JSON.stringify({ username: email, rol: data.rol || 'Sin rol' }));
           onLogin();
         } else {
           setError(data.detail || 'Credenciales incorrectas');

@@ -10,8 +10,8 @@ class CategoriaGastoAdmin(admin.ModelAdmin):
 
 @admin.register(Usuario)
 class UsuarioAdmin(admin.ModelAdmin):
-    list_display = ('username', 'email', 'rol', 'is_active', 'activo', 'fecha_creacion', 'ultimo_acceso')
-    list_filter = ('rol', 'activo', 'is_active', 'fecha_creacion')
+    list_display = ('username', 'email', 'rol', 'activo', 'fecha_creacion', 'ultimo_acceso')
+    list_filter = ('rol', 'activo', 'fecha_creacion')
     search_fields = ('username', 'email', 'rol')
     ordering = ('-fecha_creacion',)
 
