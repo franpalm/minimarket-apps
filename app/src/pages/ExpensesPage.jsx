@@ -126,15 +126,44 @@ function ExpensesPage() {
         try {
             const [gastosData, catsData] = await Promise.all([getGastos(), getCategories()]);
             setExpenses(Array.isArray(gastosData) ? gastosData : []);
-            // Combina las categorías visuales con las del backend, evitando duplicados por nombre
-            const backendCats = Array.isArray(catsData) ? catsData : (catsData.results || []);
-            const combinedCats = [...DEFAULT_CATEGORIES];
-            backendCats.forEach(cat => {
-                if (!combinedCats.some(def => def.nombre === cat.nombre)) {
-                    combinedCats.push(cat);
+
+            const backendCatsRaw = Array.isArray(catsData) ? catsData : (catsData.results || []);
+            const backendCats = backendCatsRaw
+                .filter(cat => cat && (cat.nombre || cat.name))
+                .map(cat => ({
+                    ...cat,
+                    nombre: cat.nombre || cat.name,
+                    isBackend: true,
+                }));
+
+            const mergedDefaults = DEFAULT_CATEGORIES.map(def => {
+                const match = backendCats.find(cat => cat.nombre === def.nombre);
+                if (match) {
+                    return {
+                        ...def,
+                        ...match,
+                        icon: def.icon,
+                        color: def.color,
+                        isBackend: true,
+                    };
                 }
+                return {
+                    ...def,
+                    id: `default-${def.nombre}`,
+                    isBackend: false,
+                };
             });
-            setCategories(combinedCats);
+
+            const backendExtras = backendCats
+                .filter(cat => !DEFAULT_CATEGORIES.some(def => def.nombre === cat.nombre))
+                .map(cat => ({
+                    ...cat,
+                    icon: cat.icon || '📁',
+                    color: cat.color || 'bg-slate-100 text-slate-700 border-slate-200',
+                    isBackend: true,
+                }));
+
+            setCategories([...mergedDefaults, ...backendExtras]);
         } catch (error) {
             console.error("Error cargando datos:", error);
         } finally {
@@ -360,14 +389,21 @@ function ExpensesPage() {
     }
     setLoading(true);
     const catObj = categories.find(c => (c.id || c._id) === selectedCategory);
-    
+    const rawCategoryId = catObj && catObj.isBackend !== false ? (catObj.id || catObj._id) : null;
+    const numericCategoryId = rawCategoryId && !Number.isNaN(Number(rawCategoryId)) ? Number(rawCategoryId) : null;
+
     const payload = {
         fecha: dateInput,
-        categoria_id: selectedCategory, 
-        monto: parseInt(amountInput),
+        monto: parseInt(amountInput, 10),
         metodo_pago: paymentMethod,
-        descripcion: descriptionInput || (catObj ? (catObj.nombre || catObj.name) : 'Gasto')
+        descripcion: descriptionInput || (catObj ? (catObj.nombre || catObj.name) : 'Gasto'),
     };
+
+    if (numericCategoryId !== null) {
+        payload.categoria = numericCategoryId;
+    } else if (catObj) {
+        payload.categoria_nombre = catObj.nombre || catObj.name;
+    }
 
     try {
         if (editingId) {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend } from 'recharts';
 
 const months = [
@@ -56,6 +56,27 @@ const InformeMensual = ({ reportData, formatCLP, onMonthChange, monthComparison,
     );
   }
 
+  const breakdownByPayment = useMemo(() => {
+    if (!data) {
+      return {};
+    }
+    if (data.breakdownByPayment && Object.keys(data.breakdownByPayment).length > 0) {
+      return data.breakdownByPayment;
+    }
+    if (!data.ventas) {
+      return {};
+    }
+    return data.ventas.reduce((acc, venta) => {
+      const key = (venta.metodo_pago || 'desconocido').toLowerCase();
+      if (!acc[key]) {
+        acc[key] = { cantidad: 0, total: 0 };
+      }
+      acc[key].cantidad += 1;
+      acc[key].total += Number(venta.total_venta) || 0;
+      return acc;
+    }, {});
+  }, [data]);
+
 
   // Prepara datos para el gráfico (ventas por día del mes)
   const chartData = (data.salesByDay || []).map((val, idx) => ({
@@ -68,7 +89,7 @@ const InformeMensual = ({ reportData, formatCLP, onMonthChange, monthComparison,
 
 
   // Prepara datos para gráfico de pastel (métodos de pago) y cálculo de totales
-  const breakdownEntries = Object.entries(data.breakdownByPayment || {});
+  const breakdownEntries = Object.entries(breakdownByPayment || {});
   const totalPagos = breakdownEntries.reduce((acc, [_, val]) => acc + (val.total || 0), 0);
   const totalVentas = breakdownEntries.reduce((acc, [_, val]) => acc + (val.cantidad || 0), 0);
   const pieData = breakdownEntries.map(([metodo, val]) => ({
@@ -167,6 +188,18 @@ const InformeMensual = ({ reportData, formatCLP, onMonthChange, monthComparison,
               <span>{totalVentas} ventas ({formatCLP(totalPagos)})</span>
             </li>
           </ul>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full md:w-auto">
+            <div className="rounded border border-gray-200 p-3">
+                  <div className="text-xs text-gray-500">Efectivo</div>
+                  <div className="font-bold text-green-700">{formatCLP((breakdownByPayment?.efectivo?.total) || 0)}</div>
+                  <div className="text-xs text-gray-500">{(breakdownByPayment?.efectivo?.cantidad) || 0} ventas</div>
+            </div>
+            <div className="rounded border border-gray-200 p-3">
+                  <div className="text-xs text-gray-500">Débito/Terminal</div>
+                  <div className="font-bold text-blue-700">{formatCLP((breakdownByPayment?.terminal?.total) || 0)}</div>
+                  <div className="text-xs text-gray-500">{(breakdownByPayment?.terminal?.cantidad) || 0} ventas</div>
+            </div>
+          </div>
           {/* Gráfico de pastel con tooltip personalizado */}
           {pieData.length > 0 && (
             <ResponsiveContainer width={220} height={180}>

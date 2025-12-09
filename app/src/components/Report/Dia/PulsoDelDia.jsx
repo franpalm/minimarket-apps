@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import CajaHistoryModal from './CajaHistoryModal';
 import KPICard from '../KPICard';
 import SalesByHourChart from '../SalesByHourChart';
@@ -35,8 +35,24 @@ const PulsoDelDia = ({ reportData, formatCLP }) => {
     };
   const [modalOpen, setModalOpen] = useState(false);
 
-  // Usa breakdown real si viene del backend, si no, simula
-  const breakdown = reportData?.breakdownByPayment || {};
+  // Usa breakdown real si viene del backend; si falta, lo recalcula desde las ventas
+  const breakdown = useMemo(() => {
+    if (reportData?.breakdownByPayment && Object.keys(reportData.breakdownByPayment).length > 0) {
+      return reportData.breakdownByPayment;
+    }
+    if (!reportData?.ventas) {
+      return {};
+    }
+    return reportData.ventas.reduce((acc, venta) => {
+      const key = (venta.metodo_pago || 'desconocido').toLowerCase();
+      if (!acc[key]) {
+        acc[key] = { cantidad: 0, total: 0 };
+      }
+      acc[key].cantidad += 1;
+      acc[key].total += Number(venta.total_venta) || 0;
+      return acc;
+    }, {});
+  }, [reportData]);
 
 
   // Resumen de caja y movimientos
@@ -126,15 +142,28 @@ const PulsoDelDia = ({ reportData, formatCLP }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <KPICard
-          title="Ventas Totales"
-          value={reportData ? formatCLP(reportData.totalSales) : '$--,---'}
-          unit="CLP"
-          badge="+5.2% vs día anterior"
-          badgeColor="bg-green-100 text-green-800"
-          updated="Actualizado a las --:-- AM"
-          onClick={() => setModalOpen(true)}
-        />
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Ventas Totales</h3>
+            <button className="text-xs px-2 py-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100" onClick={() => setModalOpen(true)}>Detalle</button>
+          </div>
+          <div className="mt-3">
+            <div className="text-sm text-gray-500">Total del día</div>
+            <div className="text-2xl font-bold text-indigo-700">{reportData ? formatCLP(reportData.totalSales) : '$--,---'}</div>
+          </div>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="rounded border border-gray-200 p-3">
+              <div className="text-xs text-gray-500">Efectivo</div>
+              <div className="font-bold text-green-700">{formatCLP((breakdown.efectivo && breakdown.efectivo.total) || 0)}</div>
+              <div className="text-xs text-gray-500">{(breakdown.efectivo && breakdown.efectivo.cantidad) || 0} ventas</div>
+            </div>
+            <div className="rounded border border-gray-200 p-3">
+              <div className="text-xs text-gray-500">Débito/Terminal</div>
+              <div className="font-bold text-blue-700">{formatCLP((breakdown.terminal && breakdown.terminal.total) || 0)}</div>
+              <div className="text-xs text-gray-500">{(breakdown.terminal && breakdown.terminal.cantidad) || 0} ventas</div>
+            </div>
+          </div>
+        </div>
         <KPICard
           title="Número de Ventas"
           value={reportData ? reportData.salesCount : '--'}

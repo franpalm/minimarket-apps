@@ -35,7 +35,7 @@ const SalesByHourChart = ({ data }) => {
       },
       tooltip: {
         callbacks: {
-          label: (context) => `Ventas: $${context.parsed.y.toLocaleString('es-CL')}`,
+          label: (context) => `Ventas: ${context.parsed.y.toLocaleString('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 })}`,
         },
       },
     },
@@ -43,7 +43,7 @@ const SalesByHourChart = ({ data }) => {
       y: {
         beginAtZero: true,
         ticks: {
-          callback: (value) => '$' + value.toLocaleString('es-CL'),
+          callback: (value) => value.toLocaleString('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }),
         },
       },
     },

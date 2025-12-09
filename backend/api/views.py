@@ -1,3 +1,5 @@
+import logging
+
 from .models import Presupuesto
 from .serializers import PresupuestoSerializer
 from rest_framework.decorators import api_view, permission_classes
@@ -174,13 +176,18 @@ class CajaViewSet(viewsets.ModelViewSet):
 
 from rest_framework import viewsets
 from .models import CategoriaGasto
-from .serializers import CategoriaGastoSerializer
+from .serializers import CategoriaGastoSerializer, GastoSerializer
 from .permissions import IsAdmin, IsDueno, IsCajero
 
 class CategoriaGastoViewSet(viewsets.ModelViewSet):
     queryset = CategoriaGasto.objects.all()
     serializer_class = CategoriaGastoSerializer
     permission_classes = [IsAdmin | IsDueno]
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [permissions.IsAuthenticated()]
+        return super().get_permissions()
 # Endpoint: inversión total en inventario por categoría
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Sum, F
@@ -871,6 +878,8 @@ from .models import Producto, Categoria, Proveedor, Venta, DetalleVenta
 from .models import CategoriaGasto, Gasto, Compra, DetalleCompra
 import json
 
+logger = logging.getLogger(__name__)
+
 def get_request_data(request):
     if request.content_type == 'application/json':
         try:
@@ -879,6 +888,45 @@ def get_request_data(request):
             return {}
     else:
         return request.POST.dict()
+
+
+def normalize_categoria_payload(data):
+    if not isinstance(data, dict):
+        return data
+
+    payload = data.copy()
+
+    categoria_name = payload.pop('categoria_nombre', None)
+    categoria_name = categoria_name or payload.pop('categoriaNombre', None)
+    categoria_name = categoria_name.strip() if isinstance(categoria_name, str) else categoria_name
+
+    raw_categoria = payload.get('categoria')
+
+    if isinstance(raw_categoria, str):
+        raw_stripped = raw_categoria.strip()
+        if raw_stripped.isdigit():
+            payload['categoria'] = int(raw_stripped)
+        elif raw_stripped:
+            categoria_name = categoria_name or raw_stripped
+            payload.pop('categoria', None)
+        else:
+            payload.pop('categoria', None)
+    elif raw_categoria is not None:
+        try:
+            payload['categoria'] = int(raw_categoria)
+        except (TypeError, ValueError):
+            payload.pop('categoria', None)
+
+    categoria_value = payload.get('categoria')
+    if isinstance(categoria_value, str) and categoria_value.lower() in {'', 'null', 'none', 'nan'}:
+        payload.pop('categoria', None)
+        categoria_value = None
+
+    if categoria_value is None and categoria_name:
+        categoria_obj, _ = CategoriaGasto.objects.get_or_create(nombre=categoria_name)
+        payload['categoria'] = categoria_obj.id
+
+    return payload
 
 # ---- Producto ----
 # Endpoint CRUD para Productos
@@ -1292,23 +1340,20 @@ def categoria_gasto_detail(request, pk):
 @csrf_exempt
 def gastos_list(request):
     if request.method == 'GET':
-        gastos = list(Gasto.objects.values())
-        return JsonResponse(gastos, safe=False)
+        gastos = Gasto.objects.select_related('categoria').all().order_by('-fecha', '-id')
+        serializer = GastoSerializer(gastos, many=True)
+        return JsonResponse(serializer.data, safe=False)
     elif request.method == 'POST':
-        try:
-            data = get_request_data(request)
-            gasto = Gasto.objects.create(
-                fecha=data.get('fecha'),
-                categoria_id=data.get('categoria'),
-                monto=data.get('monto', 0),
-                metodo_pago=data.get('metodo_pago', ''),
-                descripcion=data.get('descripcion', ''),
-                usuario_id=data.get('usuario'),
-                comprobante_url=data.get('comprobante_url', None)
-            )
-            return JsonResponse({'id': gasto.id}, status=201)
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=400)
+        data = normalize_categoria_payload(get_request_data(request))
+        serializer = GastoSerializer(data=data)
+        if serializer.is_valid():
+            save_kwargs = {}
+            if serializer.validated_data.get('usuario') is None and getattr(request, 'user', None) and request.user.is_authenticated:
+                save_kwargs['usuario'] = request.user
+            serializer.save(**save_kwargs)
+            return JsonResponse(serializer.data, status=201)
+        logger.warning("[GASTO] Payload inválido %s errores %s", data, serializer.errors)
+        return JsonResponse(serializer.errors, status=400)
     else:
         return HttpResponseNotAllowed(['GET', 'POST'])
 
@@ -1321,31 +1366,18 @@ def gasto_detail(request, pk):
         return JsonResponse({'error': 'Gasto no encontrado'}, status=404)
 
     if request.method == 'GET':
-        return JsonResponse({
-            'id': gasto.id,
-            'fecha': gasto.fecha,
-            'categoria': gasto.categoria_id,
-            'monto': float(gasto.monto),
-            'metodo_pago': gasto.metodo_pago,
-            'descripcion': gasto.descripcion,
-            'usuario': gasto.usuario_id,
-            'comprobante_url': gasto.comprobante_url,
-            'creado_en': gasto.creado_en
-        })
+        serializer = GastoSerializer(gasto)
+        return JsonResponse(serializer.data, safe=False)
     elif request.method == 'PUT':
-        try:
-            data = get_request_data(request)
-            gasto.fecha = data.get('fecha', gasto.fecha)
-            gasto.categoria_id = data.get('categoria', gasto.categoria_id)
-            gasto.monto = data.get('monto', gasto.monto)
-            gasto.metodo_pago = data.get('metodo_pago', gasto.metodo_pago)
-            gasto.descripcion = data.get('descripcion', gasto.descripcion)
-            gasto.usuario_id = data.get('usuario', gasto.usuario_id)
-            gasto.comprobante_url = data.get('comprobante_url', gasto.comprobante_url)
-            gasto.save()
-            return JsonResponse({'ok': True})
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=400)
+        data = normalize_categoria_payload(get_request_data(request))
+        serializer = GastoSerializer(gasto, data=data, partial=True)
+        if serializer.is_valid():
+            save_kwargs = {}
+            if serializer.validated_data.get('usuario', gasto.usuario) is None and getattr(request, 'user', None) and request.user.is_authenticated:
+                save_kwargs['usuario'] = request.user
+            serializer.save(**save_kwargs)
+            return JsonResponse(serializer.data)
+        return JsonResponse(serializer.errors, status=400)
     elif request.method == 'DELETE':
         try:
             gasto.delete()

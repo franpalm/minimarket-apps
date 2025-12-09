@@ -8,7 +8,6 @@ function Sidebar({ currentPage, onNavigate, user }) {
     { key: 'sales', label: 'Ventas', icon: 'bi-cart' },
     { key: 'expenses', label: 'Gastos', icon: 'bi-cash' },
     { key: 'reports', label: 'Reportes', icon: 'bi-graph-up' },
-    { key: 'settings', label: 'Configuración', icon: 'bi-gear' },
   ];
 
   return (
@@ -49,7 +48,7 @@ function Sidebar({ currentPage, onNavigate, user }) {
             height="32"
             className="rounded-full"
           />
-          <span className="font-semibold">{user?.username || 'Usuario'} <span className="text-xs text-gray-300">({user?.rol || 'Sin rol'})</span></span>
+          <span className="font-semibold">{user?.username || 'Usuario'}{user?.rol && user.rol !== 'Sin rol' ? <span className="text-xs text-gray-300"> ({user.rol})</span> : null}</span>
           <svg className="w-4 h-4 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
@@ -57,7 +56,7 @@ function Sidebar({ currentPage, onNavigate, user }) {
         {dropdownOpen && (
           <ul className="absolute left-6 right-6 bottom-16 mb-2 bg-gray-800 rounded shadow-lg py-2 z-50">
             <li>
-              <span className="block px-4 py-2 text-gray-100">{user?.username || 'Usuario'} <span className="text-xs text-gray-400">({user?.rol || 'Sin rol'})</span></span>
+              <span className="block px-4 py-2 text-gray-100">{user?.username || 'Usuario'}{user?.rol && user.rol !== 'Sin rol' ? <span className="text-xs text-gray-400"> ({user.rol})</span> : null}</span>
             </li>
             <li>
               <a className="block px-4 py-2 text-gray-100 hover:bg-blue-600 rounded" href="#">Mi Perfil</a>
@@ -66,7 +65,17 @@ function Sidebar({ currentPage, onNavigate, user }) {
               <hr className="my-1 border-gray-700" />
             </li>
             <li>
-              <a className="block px-4 py-2 text-gray-100 hover:bg-blue-600 rounded" href="#">Cerrar Sesión</a>
+              <button
+                className="block w-full text-left px-4 py-2 text-gray-100 hover:bg-blue-600 rounded"
+                onClick={() => {
+                  localStorage.removeItem('user');
+                  localStorage.removeItem('token');
+                  localStorage.removeItem('refresh_token');
+                  sessionStorage.removeItem('access_token');
+                  sessionStorage.removeItem('refresh_token');
+                  window.location.reload();
+                }}
+              >Cerrar Sesión</button>
             </li>
           </ul>
         )}

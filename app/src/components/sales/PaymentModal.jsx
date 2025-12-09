@@ -7,26 +7,20 @@ const PaymentModal = ({ show, cartTotal, onConfirm, onCancel, showToast, payment
   // Handler para confirmar el pago
   const handleConfirm = async () => {
     if (selectedPaymentMethod === 'efectivo') {
-      onConfirm(
-        parseInt(cashReceived, 10),
-        changeDue,
-        'efectivo',
-        null
-      );
-    } else if (selectedPaymentMethod === 'terminal' && selectedTerminal === 'compraqui_manual') {
-      // El flujo manual se maneja en TerminalPagoBancoEstado
-      // No hacer nada aquí
-    } else if (selectedPaymentMethod === 'terminal') {
-      const result = await processPayment(cartTotal);
-      if (result && result.success) {
-        onConfirm(
-          cartTotal,
-          0,
-          'tarjeta',
-          result
-        );
-      } else {
-        showToast('Error de Pago', result.error || 'La transacción con el terminal falló.', 'error');
+      onConfirm(parseInt(cashReceived, 10), changeDue, 'efectivo', null);
+      return;
+    }
+    if (selectedPaymentMethod === 'terminal') {
+      if (selectedTerminal === 'CompraAqui') {
+        // Modo manual CompraAquí: solo completar venta
+        onConfirm(cartTotal, 0, 'terminal', null);
+        return;
+      }
+      // Iniciar intento con el hook (MercadoPago/TUU)
+      try {
+        await startPayment({ amount: cartTotal, deviceId: selectedTerminal });
+      } catch (e) {
+        showToast && showToast('Error de Pago', e.message || 'No se pudo iniciar el pago', 'error');
       }
     }
   };
@@ -61,37 +55,22 @@ const PaymentModal = ({ show, cartTotal, onConfirm, onCancel, showToast, payment
   const [selectedTerminal, setSelectedTerminal] = useState('compraqui_manual');
   
   // Hook del sistema de pagos
-  const {
-    connectionStatus,
-    isProcessing,
-    paymentStatus,
-    currentTransaction,
-    availableTerminals,
-    connectTerminal,
-    processPayment,
-    cancelPayment,
-    disconnect,
-    isConnected,
-    terminalType
-  } = usePaymentTerminal();
+  const { status, paymentResult, error, startPayment, resetPayment, isProcessing } = usePaymentTerminal();
+
+  const handleCancelPayment = () => {
+    resetPayment && resetPayment();
+  };
 
   // Cleanup: al desmontar el modal, cancelar cualquier pago en curso y desconectar terminales
   useEffect(() => {
-    return () => {
-      const cleanupTerminal = async () => {
-        // Si hay una transacción en curso, intenta cancelarla
-        if (isProcessing && typeof cancelPayment === 'function') {
-          await cancelPayment();
-        }
-        // Si está conectado, desconecta
-        if (isConnected && typeof disconnect === 'function') {
-          await disconnect();
-        }
-      };
-
-      cleanupTerminal();
-    };
-  }, [isProcessing, isConnected, cancelPayment, disconnect]);
+    // Cuando el hook reporta éxito, completar venta por terminal
+    if (status === 'success') {
+      onConfirm(cartTotal, 0, 'terminal', paymentResult);
+      resetPayment();
+    } else if (status === 'error' && error) {
+      showToast && showToast('Error de Pago', error, 'error');
+    }
+  }, [status, paymentResult, error]);
 
   if (!show) return null;
   return ReactDOM.createPortal(
@@ -204,56 +183,19 @@ const PaymentModal = ({ show, cartTotal, onConfirm, onCancel, showToast, payment
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium">Estado de conexión:</span>
+                  <span className="font-medium">Estado de pago:</span>
                   <span className={`px-2 py-1 rounded-full text-sm font-medium ${
-                    isConnected 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
+                    status === 'success' ? 'bg-green-100 text-green-800' :
+                    status === 'error' ? 'bg-red-100 text-red-800' :
+                    status === 'pending' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
                   }`}>
-                    {isConnected ? '✅ Conectado' : '❌ Desconectado'}
+                    {status}
                   </span>
                 </div>
-                {terminalType && (
-                  <div className="text-sm text-gray-600 mb-2">
-                    Terminal: {terminalType}
-                  </div>
-                )}
-                {connectionStatus.lastPing && (
-                  <div className="text-xs text-gray-500">
-                    Último ping: {new Date(connectionStatus.lastPing).toLocaleTimeString()}
-                  </div>
+                {status === 'pending' && (
+                  <div className="text-xs text-gray-600">Esperando confirmación en el terminal...</div>
                 )}
               </div>
-              {!isConnected && (
-                <button
-                  onClick={handleConnectTerminal}
-                  disabled={isProcessing || !selectedTerminal}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-3 font-medium transition-colors disabled:bg-gray-400"
-                >
-                  {isProcessing ? 'Conectando...' : 'Conectar Terminal'}
-                </button>
-              )}
-              {paymentStatus && (
-                <div className={`p-3 rounded-lg text-sm ${
-                  paymentStatus.includes('Error') || paymentStatus.includes('error')
-                    ? 'bg-red-100 text-red-800 border border-red-200'
-                    : paymentStatus.includes('exitoso') || paymentStatus.includes('Éxito')
-                      ? 'bg-green-100 text-green-800 border border-green-200'
-                      : 'bg-blue-100 text-blue-800 border border-blue-200'
-                }`}>
-                  <div className="font-medium">{paymentStatus}</div>
-                  {currentTransaction && currentTransaction.status === 'processing' && (
-                    <div className="mt-2">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
-                      </div>
-                      <div className="text-xs mt-1 text-gray-600">
-                        Procesando pago de {formatPrice(currentTransaction.amount)}...
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )}
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
@@ -282,8 +224,7 @@ const PaymentModal = ({ show, cartTotal, onConfirm, onCancel, showToast, payment
               onClick={handleConfirm}
               disabled={
                 isProcessing || 
-                (selectedPaymentMethod === 'efectivo' && (parseInt(cashReceived, 10) < cartTotal || !cashReceived)) ||
-                (selectedPaymentMethod === 'terminal' && !isConnected)
+                (selectedPaymentMethod === 'efectivo' && (parseInt(cashReceived, 10) < cartTotal || !cashReceived))
               }
             >
               {isProcessing ? (
@@ -300,6 +241,14 @@ const PaymentModal = ({ show, cartTotal, onConfirm, onCancel, showToast, payment
                   : '🚀 Procesar con Terminal'
               )}
             </button>
+            {selectedPaymentMethod === 'terminal' && !isProcessing && (
+              <button
+                className="bg-gray-700 hover:bg-gray-800 text-white rounded-lg px-6 py-2 font-medium transition-colors ml-2"
+                onClick={() => {
+                  onConfirm(cartTotal, 0, 'terminal', null);
+                }}
+              >Completar Venta Manual</button>
+            )}
           </div>
         </React.Fragment>
       </div>

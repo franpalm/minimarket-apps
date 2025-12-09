@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
-import Chart from 'chart.js/auto';
+import React, { useState, useEffect, useMemo } from "react";
+import PulsoDelDia from '../components/Report/Dia/PulsoDelDia';
+import { getGastos, createGasto, updateGasto, deleteGasto } from "../services/GastoService";
+import { getCategories } from "../services/CategoryService";
+import authFetch from "../utils/authFetch";
 
 // --- PALETA DE COLORES VIBRANTE Y MODERNA ---
 const CHART_PALETTE = [
@@ -15,7 +18,7 @@ const CHART_PALETTE = [
   '#6366f1'  // Indigo Light
 ];
 
-// --- SIMULACIÓN DE DATOS (BACKEND) ---
+// --- NOTIFICACIONES SIMPLES ---
 const useNotification = () => {
     const showNotification = (message, type = 'info') => {
         console.log(`[${type.toUpperCase()}] ${message}`);
@@ -23,19 +26,7 @@ const useNotification = () => {
     return { showNotification };
 };
 
-// Datos simulados
-let mockExpensesData = [
-    { id: 1001, fecha: '2025-01-20', categoria_id: 1, monto: 500000, metodo_pago: 'Transferencia', descripcion: 'Arriendo Enero' },
-    { id: 1002, fecha: '2025-02-25', categoria_id: 2, monto: 45000, metodo_pago: 'Efectivo', descripcion: 'Luz Febrero' },
-    { id: 1005, fecha: '2025-03-02', categoria_id: 4, monto: 180000, metodo_pago: 'Transferencia', descripcion: 'Bebidas Marzo' },
-    { id: 1006, fecha: '2025-04-05', categoria_id: 3, monto: 350000, metodo_pago: 'Efectivo', descripcion: 'Sueldo Abril' },
-    { id: 1007, fecha: '2025-11-10', categoria_id: 5, monto: 20000, metodo_pago: 'Efectivo', descripcion: 'Flete Nov' },
-    { id: 1008, fecha: '2025-12-12', categoria_id: 4, monto: 85000, metodo_pago: 'Débito', descripcion: 'Abarrotes Dic' },
-    { id: 1009, fecha: new Date().toISOString().split('T')[0], categoria_id: 2, monto: 15000, metodo_pago: 'Efectivo', descripcion: 'Servicios Hoy' },
-    { id: 1010, fecha: new Date().toISOString().split('T')[0], categoria_id: 1, monto: 10000, metodo_pago: 'Efectivo', descripcion: 'Arriendo Hoy (Extra)' }
-];
-
-let mockCategoriesData = [
+const DEFAULT_CATEGORIES = [
     { id: 1, nombre: 'Arriendo', icon: '🏠', color: 'bg-blue-100 text-blue-700 border-blue-200' },
     { id: 2, nombre: 'Servicios', icon: '💡', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
     { id: 3, nombre: 'Sueldos', icon: '👥', color: 'bg-purple-100 text-purple-700 border-purple-200' },
@@ -43,23 +34,6 @@ let mockCategoriesData = [
     { id: 5, nombre: 'Transporte', icon: '🚚', color: 'bg-orange-100 text-orange-700 border-orange-200' },
     { id: 6, nombre: 'Otros', icon: '📦', color: 'bg-gray-100 text-gray-700 border-gray-200' },
 ];
-
-// Simuladores de API
-const getGastos = async () => [...mockExpensesData];
-const createGasto = async (gasto) => {
-    const newGasto = { id: Date.now(), ...gasto };
-    mockExpensesData.push(newGasto);
-    return newGasto;
-};
-const updateGasto = async (id, updatedGasto) => {
-    mockExpensesData = mockExpensesData.map(g => g.id === id ? { ...g, ...updatedGasto } : g);
-    return { id, ...updatedGasto };
-};
-const deleteGasto = async (id) => {
-    mockExpensesData = mockExpensesData.filter(g => g.id !== id);
-    return { success: true };
-};
-const getCategories = async () => mockCategoriesData;
 
 // --- UTILIDAD DE FORMATO CLP MEJORADA ---
 const formatCLP = (amount) => {
@@ -71,6 +45,81 @@ const formatCLP = (amount) => {
         maximumFractionDigits: 0
     });
 };
+
+// --- COMPONENTES DE GRÁFICOS SIMPLES (SIN LIBRERÍAS EXTERNAS) ---
+const SimpleBarChart = ({ labels = [], data = [], colors = [] }) => {
+    if (!data.length) {
+        return <p className="text-center text-sm text-slate-400">Sin datos para mostrar.</p>;
+    }
+    const maxValue = Math.max(...data, 1);
+    return (
+        <div className="h-48 flex items-end gap-3">{
+            labels.map((label, idx) => {
+                const value = data[idx];
+                const heightPct = Math.max((value / maxValue) * 100, 5);
+                return (
+                    <div key={`${label}-${idx}`} className="flex-1 flex flex-col items-center gap-2">
+                        <div
+                            className="w-full rounded-t-2xl shadow-sm transition-all"
+                            style={{
+                                height: `${heightPct}%`,
+                                backgroundColor: colors[idx] || 'rgba(79,70,229,0.8)'
+                            }}
+                        ></div>
+                        <span className="text-xs font-semibold text-slate-500 text-center truncate w-full">{label}</span>
+                        <span className="text-[11px] text-slate-400">{formatCLP(value)}</span>
+                    </div>
+                );
+            })
+        }</div>
+    );
+};
+
+const SimpleDonutChart = ({ segments = [] }) => {
+    const total = segments.reduce((sum, seg) => sum + seg.value, 0);
+    if (!total) {
+        return <p className="text-center text-sm text-slate-400">Sin datos para mostrar.</p>;
+    }
+    let accumulated = 0;
+    return (
+        <div className="relative h-48 w-full flex flex-col items-center justify-center">
+            <svg viewBox="0 0 36 36" className="w-36 h-36 -rotate-90">
+                {segments.map((segment, idx) => {
+                    const percentage = (segment.value / total) * 100;
+                    const dashArray = `${percentage} ${100 - percentage}`;
+                    const circle = (
+                        <circle
+                            key={`${segment.label}-${idx}`}
+                            cx="18"
+                            cy="18"
+                            r="15.9155"
+                            fill="transparent"
+                            stroke={segment.color}
+                            strokeWidth="4"
+                            strokeDasharray={dashArray}
+                            strokeDashoffset={accumulated}
+                        />
+                    );
+                    accumulated += percentage;
+                    return circle;
+                })}
+            </svg>
+            <p className="text-lg font-black text-slate-700">{formatCLP(total)}</p>
+        </div>
+    );
+};
+
+const ChartLegend = ({ segments = [] }) => (
+    <div className="flex flex-wrap justify-center gap-3 text-xs mt-2">
+        {segments.map(segment => (
+            <div key={segment.label} className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: segment.color }}></span>
+                <span className="font-semibold text-slate-600">{segment.label}</span>
+                <span className="text-slate-400">{formatCLP(segment.value)}</span>
+            </div>
+        ))}
+    </div>
+);
 
 // Utilidades de Fechas
 const checkDateInRange = (dateString, range) => {
@@ -95,11 +144,11 @@ const checkDateInRange = (dateString, range) => {
 function ExpensesPage() {
   const [theme, setTheme] = useState('light');
   const [expenses, setExpenses] = useState([]);
-  const [categories, setCategories] = useState([]);
+    const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   
   // Estados
   const [amountInput, setAmountInput] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState(null);
+    const [selectedCategory, setSelectedCategory] = useState(DEFAULT_CATEGORIES[0]?.id ?? null);
   const [descriptionInput, setDescriptionInput] = useState("");
   const [dateInput, setDateInput] = useState(new Date().toISOString().split('T')[0]);
   const [paymentMethod, setPaymentMethod] = useState("Efectivo");
@@ -110,39 +159,140 @@ function ExpensesPage() {
   const [budgetLimit, setBudgetLimit] = useState(1500000);
   const [timeFilter, setTimeFilter] = useState('day'); 
   const { showNotification } = useNotification();
-  
-  // Refs
-  const mainChartRef = useRef(null);
-  const chartInstance = useRef(null);
-  const categoryChartRef = useRef(null);
-  const categoryChartInstance = useRef(null);
-  const paymentChartRef = useRef(null);
-  const paymentChartInstance = useRef(null);
-
-  const totalVentasMes = 3500000; 
+  const [monthlyReport, setMonthlyReport] = useState({
+      totalVentas: 0,
+      breakdownByPayment: {
+          efectivo: { total: 0, cantidad: 0 },
+          terminal: { total: 0, cantidad: 0 }
+      }
+  });
+  const [monthlyReportStatus, setMonthlyReportStatus] = useState('idle');
+  const [monthlyReportError, setMonthlyReportError] = useState(null);
 
   // --- CARGA ---
   useEffect(() => { loadData(); }, []);
 
+  useEffect(() => {
+      async function fetchMonthlyReport() {
+          setMonthlyReportStatus('loading');
+          setMonthlyReportError(null);
+          try {
+              const now = new Date();
+              const month = now.getMonth() + 1;
+              const year = now.getFullYear();
+              const response = await authFetch(`http://localhost:8000/api/reportes/mensual/?month=${month}&year=${year}`);
+              if (!response.ok) {
+                  throw new Error('No se pudo obtener el reporte mensual.');
+              }
+              const data = await response.json();
+              const efectivo = data?.breakdownByPayment?.efectivo || { total: 0, cantidad: 0 };
+              const terminal = data?.breakdownByPayment?.terminal || { total: 0, cantidad: 0 };
+              setMonthlyReport({
+                  totalVentas: data?.totalSales ?? data?.totalVentas ?? 0,
+                  breakdownByPayment: { efectivo, terminal }
+              });
+              setMonthlyReportStatus('success');
+          } catch (error) {
+              setMonthlyReport({
+                  totalVentas: 0,
+                  breakdownByPayment: {
+                      efectivo: { total: 0, cantidad: 0 },
+                      terminal: { total: 0, cantidad: 0 }
+                  }
+              });
+              setMonthlyReportStatus('error');
+              setMonthlyReportError(error.message || 'Error desconocido');
+          }
+      }
+      fetchMonthlyReport();
+  }, []);
+
   const loadData = async () => {
     setLoading(true);
-    const [gastos, cats] = await Promise.all([getGastos(), getCategories()]);
-    setExpenses(gastos);
-    setCategories(cats);
-    setLoading(false);
+    try {
+        const [gastos, cats] = await Promise.all([getGastos(), getCategories()]);
+        const rawCategories = Array.isArray(cats) ? cats : (cats?.results ?? []);
+        const sourceCategories = rawCategories.length ? rawCategories : DEFAULT_CATEGORIES;
+
+        // Normalizar categorías: asegurar id numérico y nombre string
+        const categoriesNormalized = (sourceCategories || []).map((c, idx) => ({
+            ...c,
+            id: c && c.id !== undefined && c.id !== null && !Number.isNaN(Number(c.id)) ? Number(c.id) : c.id ?? idx + 1,
+            nombre: c && typeof c.nombre === 'string' ? c.nombre : String(c?.nombre ?? ''),
+        }));
+
+        // Índices auxiliares
+        const idByName = Object.fromEntries(
+            categoriesNormalized
+                .filter(c => typeof c.nombre === 'string' && c.nombre.trim().length)
+                .map(c => [c.nombre.toLowerCase(), c.id])
+        );
+
+        // Normalizar gastos: mapear categoria desde id/objeto/nombre a id numérico e incluir nombre
+        const gastosNormalizados = (gastos || []).map(g => {
+            let raw = g.categoria_id ?? g.categoria ?? g?.categoria_detalle ?? g?.categoria_obj;
+            let catName = g.categoria_nombre || g?.categoria?.nombre || g?.categoria?.name;
+            // Si viene objeto, tomar id o pk
+            if (raw && typeof raw === 'object') {
+                catName = catName ?? raw.nombre ?? raw.name;
+                raw = raw.id ?? raw.pk ?? raw.value ?? raw.categoria_id ?? raw.categoria;
+            }
+            // Si es string no numérica, buscar por nombre (case-insensitive)
+            let catId;
+            if (raw !== undefined && raw !== null && raw !== '') {
+                if (!Number.isNaN(Number(raw))) {
+                    catId = Number(raw);
+                } else if (typeof raw === 'string') {
+                    const lookup = idByName[raw.toLowerCase()];
+                    catId = lookup !== undefined ? lookup : undefined;
+                    catName = catName ?? raw;
+                }
+            }
+            if (!catName && catId !== undefined) {
+                const match = categoriesNormalized.find(c => c.id === catId);
+                catName = match?.nombre;
+            }
+            return {
+                ...g,
+                categoria_id: catId,
+                categoria: catId,
+                categoria_nombre: catName,
+            };
+        });
+
+        setExpenses(gastosNormalizados);
+        setCategories(categoriesNormalized);
+        if (categoriesNormalized.length) {
+            const exists = categoriesNormalized.some(cat => cat.id === selectedCategory);
+            if (!exists) {
+                setSelectedCategory(categoriesNormalized[0].id);
+            }
+        }
+    } catch (error) {
+        console.error('Error cargando datos', error);
+        showNotification('No fue posible cargar gastos o categorías. Revisa tu conexión.', 'error');
+        setCategories(DEFAULT_CATEGORIES);
+        setSelectedCategory(DEFAULT_CATEGORIES[0]?.id ?? null);
+    } finally {
+        setLoading(false);
+    }
   };
 
   // --- CÁLCULOS ---
   const expensesInTimeRange = useMemo(() => expenses.filter(g => checkDateInRange(g.fecha, timeFilter)), [expenses, timeFilter]);
   const totalGastosFiltrados = useMemo(() => expensesInTimeRange.reduce((sum, g) => sum + Number(g.monto), 0), [expensesInTimeRange]);
   
+  const ventasEstimadas = useMemo(() => {
+      let base = monthlyReport.totalVentas || 0;
+      if (timeFilter === 'day') base = base / 30;
+      if (timeFilter === 'week') base = base / 4;
+      if (timeFilter === 'year') base = base * 12;
+      return base;
+  }, [timeFilter, monthlyReport.totalVentas]);
+
   const gananciaNeta = useMemo(() => {
-      let ventasEstimadas = totalVentasMes;
-      if (timeFilter === 'day') ventasEstimadas = totalVentasMes / 30;
-      if (timeFilter === 'week') ventasEstimadas = totalVentasMes / 4;
-      if (timeFilter === 'year') ventasEstimadas = totalVentasMes * 12;
       return ventasEstimadas - totalGastosFiltrados;
-  }, [timeFilter, totalGastosFiltrados]);
+  }, [ventasEstimadas, totalGastosFiltrados]);
   
   const porcentajePresupuesto = (totalGastosFiltrados / (timeFilter === 'year' ? budgetLimit * 12 : budgetLimit)) * 100;
   let budgetColor = 'bg-emerald-500';
@@ -151,16 +301,150 @@ function ExpensesPage() {
 
   const filteredListExpenses = useMemo(() => {
       if (listFilter === 'all') return expensesInTimeRange;
-      return expensesInTimeRange.filter(g => g.categoria_id === listFilter);
+      return expensesInTimeRange.filter(g => Number(g.categoria_id ?? g.categoria) === listFilter);
   }, [expensesInTimeRange, listFilter]);
+
+  const categoryColorMap = useMemo(() => {
+      const map = {};
+      categories.forEach((cat, idx) => {
+          map[cat.nombre] = CHART_PALETTE[idx % CHART_PALETTE.length];
+      });
+      return map;
+  }, [categories]);
+
+  const mainChartData = useMemo(() => {
+      const base = { labels: [], data: [], colors: [] };
+      if (!expensesInTimeRange.length) return base;
+
+      if (timeFilter === 'year') {
+          const labels = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+          const data = new Array(12).fill(0);
+          expensesInTimeRange.forEach(g => {
+              const month = parseInt(g.fecha.split('-')[1], 10) - 1;
+              if (month >= 0 && month < 12) data[month] += Number(g.monto);
+          });
+          return { labels, data, colors: labels.map(() => CHART_PALETTE[0]) };
+      }
+
+      if (timeFilter === 'month') {
+          const now = new Date();
+          const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+          const labels = Array.from({ length: daysInMonth }, (_, i) => `${i + 1}`);
+          const data = new Array(daysInMonth).fill(0);
+          expensesInTimeRange.forEach(g => {
+              const day = parseInt(g.fecha.split('-')[2], 10) - 1;
+              if (day >= 0 && day < daysInMonth) data[day] += Number(g.monto);
+          });
+          return { labels, data, colors: labels.map(() => CHART_PALETTE[1]) };
+      }
+
+      if (timeFilter === 'week') {
+          const labels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+          const data = new Array(7).fill(0);
+          expensesInTimeRange.forEach(g => {
+              const date = new Date(g.fecha);
+              let dayIndex = date.getDay() - 1;
+              if (dayIndex === -1) dayIndex = 6;
+              data[dayIndex] += Number(g.monto);
+          });
+          return { labels, data, colors: labels.map((_, idx) => CHART_PALETTE[idx % CHART_PALETTE.length]) };
+      }
+
+      // Día actual: agrupar por categoría (con fallback al nombre del gasto)
+      const catMap = {};
+      expensesInTimeRange.forEach(g => {
+          const cat = categories.find(c => c.id === Number(g.categoria_id ?? g.categoria));
+          const catName = cat?.nombre || g.categoria_nombre || 'Otros';
+          catMap[catName] = (catMap[catName] || 0) + Number(g.monto);
+      });
+      const labels = Object.keys(catMap);
+      const data = Object.values(catMap);
+      const colors = labels.map(name => name === 'Otros' ? '#94a3b8' : (categoryColorMap[name] || '#6366f1'));
+      return { labels, data, colors };
+  }, [expensesInTimeRange, timeFilter, categories, categoryColorMap]);
+
+  const categoryBreakdown = useMemo(() => {
+      const map = {};
+      expensesInTimeRange.forEach(g => {
+          const cat = categories.find(c => c.id === Number(g.categoria_id ?? g.categoria));
+          const label = cat?.nombre || g.categoria_nombre || 'Otros';
+          map[label] = (map[label] || 0) + Number(g.monto);
+      });
+      return Object.entries(map).map(([label, value], idx) => ({
+          label,
+          value,
+          color: label === 'Otros' ? '#94a3b8' : CHART_PALETTE[idx % CHART_PALETTE.length]
+      }));
+  }, [expensesInTimeRange, categories]);
+
+    const getMetodoCantidad = (entry) => entry?.cantidad ?? entry?.count ?? 0;
+
+        // Integrate PulsoDelDia breakdown if available
+        const [pulsoReport, setPulsoReport] = useState(null);
+
+        useEffect(() => {
+            // Try to extract PulsoDelDia data from the DOM (if rendered elsewhere)
+            const pulsoDataEl = document.getElementById('pulso-del-dia-data');
+            if (pulsoDataEl) {
+                try {
+                    const pulsoData = JSON.parse(pulsoDataEl.textContent);
+                    setPulsoReport(pulsoData);
+                    return;
+                } catch {}
+            }
+            // Fallback: use monthlyReport.pulsoDelDia if present
+            setPulsoReport(monthlyReport.pulsoDelDia || null);
+        }, [monthlyReport]);
+
+        const paymentBreakdown = useMemo(() => {
+            // Prefer PulsoDelDia breakdown if available
+            let breakdown = null;
+            if (pulsoReport && pulsoReport.breakdownByPayment) {
+                breakdown = pulsoReport.breakdownByPayment;
+            } else if (monthlyReport.breakdownByPayment) {
+                breakdown = monthlyReport.breakdownByPayment;
+            }
+            const segments = [];
+            if (breakdown) {
+                if (breakdown.efectivo && breakdown.efectivo.total > 0) {
+                    segments.push({ label: 'Efectivo', value: breakdown.efectivo.total, color: '#10b981' });
+                }
+                if (breakdown.terminal && breakdown.terminal.total > 0) {
+                    segments.push({ label: 'Débito / Terminal', value: breakdown.terminal.total, color: '#4f46e5' });
+                }
+                // Add other payment methods if needed
+                if (segments.length) return segments;
+            }
+            // Fallback: compute from expenses
+            const payMap = {};
+            expensesInTimeRange.forEach(g => {
+                const label = g.metodo_pago || 'Sin método';
+                payMap[label] = (payMap[label] || 0) + Number(g.monto);
+            });
+            return Object.entries(payMap).map(([label, value], idx) => ({
+                label,
+                value,
+                color: CHART_PALETTE[(idx + 3) % CHART_PALETTE.length]
+            }));
+        }, [pulsoReport, monthlyReport.breakdownByPayment, expensesInTimeRange]);
+
+    const efectivoData = monthlyReport.breakdownByPayment?.efectivo || { total: 0, cantidad: 0, count: 0 };
+    const terminalData = monthlyReport.breakdownByPayment?.terminal || { total: 0, cantidad: 0, count: 0 };
 
   // --- EXPORT ---
   const handleExportCSV = () => {
       const headers = ["ID", "Fecha", "Categoría", "Descripción", "Método Pago", "Monto"];
-      const rows = expensesInTimeRange.map(g => [
-          g.id, g.fecha, categories.find(c => c.id === g.categoria_id)?.nombre || 'Otros',
-          `"${g.descripcion}"`, g.metodo_pago, g.monto
-      ]);
+      const rows = expensesInTimeRange.map(g => {
+          const cat = categories.find(c => c.id === Number(g.categoria_id ?? g.categoria));
+          return [
+              g.id,
+              g.fecha,
+              cat ? cat.nombre : (g.categoria_nombre || 'Otros'),
+              `"${g.descripcion}"`,
+              g.metodo_pago,
+              g.monto
+          ];
+      });
       const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
       const link = document.createElement("a");
       link.setAttribute("href", encodeURI(csvContent));
@@ -170,176 +454,53 @@ function ExpensesPage() {
       document.body.removeChild(link);
   };
 
-  // --- GRÁFICOS ---
-  useEffect(() => {
-    if (chartInstance.current) chartInstance.current.destroy();
-    if (mainChartRef.current) {
-        let labels = [];
-        let data = [];
-        let chartType = 'line';
-        let colors = []; // Array de colores para las barras
-
-        // CONFIGURACIÓN DEL GRÁFICO SEGÚN EL FILTRO
-        if (timeFilter === 'year') {
-            labels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-            data = new Array(12).fill(0);
-            expensesInTimeRange.forEach(g => {
-                const month = parseInt(g.fecha.split('-')[1]) - 1;
-                data[month] += Number(g.monto);
-            });
-            colors = CHART_PALETTE[0]; // Color único para línea de tiempo
-        } else if (timeFilter === 'month') {
-            const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
-            labels = Array.from({length: daysInMonth}, (_, i) => (i + 1).toString());
-            data = new Array(daysInMonth).fill(0);
-            expensesInTimeRange.forEach(g => {
-                const day = parseInt(g.fecha.split('-')[2]) - 1;
-                data[day] += Number(g.monto);
-            });
-            colors = CHART_PALETTE[0];
-        } else if (timeFilter === 'week') {
-            labels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-            data = new Array(7).fill(0);
-            expensesInTimeRange.forEach(g => {
-                const date = new Date(g.fecha);
-                let dayIndex = date.getDay() - 1;
-                if (dayIndex === -1) dayIndex = 6;
-                data[dayIndex] += Number(g.monto);
-            });
-            chartType = 'bar';
-            colors = CHART_PALETTE.slice(0, 7); // Colores distintos por día
-        } else {
-            // GRÁFICO DIARIO (HOY): Barras por Categoría (Multicolor)
-            const catMap = {};
-            expensesInTimeRange.forEach(g => {
-                const catName = categories.find(c => c.id === g.categoria_id)?.nombre || 'Otros';
-                catMap[catName] = (catMap[catName] || 0) + Number(g.monto);
-            });
-            labels = Object.keys(catMap);
-            data = Object.values(catMap);
-            chartType = 'bar';
-            // Asignar un color distinto a cada categoría
-            colors = labels.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]);
-        }
-
-        chartInstance.current = new Chart(mainChartRef.current, {
-            type: chartType, 
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Gastos',
-                    data: data,
-                    // Si es gráfico de barras por día/hoy, usa array de colores. Si es línea, usa gradiente/color sólido
-                    backgroundColor: chartType === 'bar' ? colors : 'rgba(79, 70, 229, 0.2)', 
-                    borderColor: chartType === 'line' ? '#4f46e5' : 'transparent',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4,
-                    borderRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { 
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                        padding: 12,
-                        callbacks: {
-                            label: (context) => formatCLP(context.raw) // TOOLTIP EN CLP
-                        }
-                    }
-                },
-                scales: {
-                    y: { 
-                        beginAtZero: true, 
-                        grid: { color: 'rgba(0,0,0,0.05)', borderDash: [5, 5] }, 
-                        ticks: { 
-                            callback: (value) => formatCLP(value) // EJE Y EN CLP
-                        } 
-                    },
-                    x: { grid: { display: false } }
-                }
-            }
-        });
-    }
-  }, [expensesInTimeRange, timeFilter]);
-
-  // GRÁFICOS SECUNDARIOS (Colores mejorados)
-  useEffect(() => {
-    if (showDetailedStats) {
-        if (categoryChartInstance.current) categoryChartInstance.current.destroy();
-        if (categoryChartRef.current) {
-            const catMap = {};
-            expensesInTimeRange.forEach(g => {
-                const catName = categories.find(c => c.id === g.categoria_id)?.nombre || 'Otros';
-                catMap[catName] = (catMap[catName] || 0) + Number(g.monto);
-            });
-            categoryChartInstance.current = new Chart(categoryChartRef.current, {
-                type: 'doughnut',
-                data: {
-                    labels: Object.keys(catMap),
-                    datasets: [{
-                        data: Object.values(catMap),
-                        backgroundColor: CHART_PALETTE, // Paleta multicolor
-                        borderWidth: 0,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { 
-                        legend: { position: 'right' },
-                        tooltip: { callbacks: { label: (c) => ` ${c.label}: ${formatCLP(c.raw)}` } }
-                    }
-                }
-            });
-        }
-        if (paymentChartInstance.current) paymentChartInstance.current.destroy();
-        if (paymentChartRef.current) {
-            const payMap = {};
-            expensesInTimeRange.forEach(g => {
-                payMap[g.metodo_pago] = (payMap[g.metodo_pago] || 0) + Number(g.monto);
-            });
-            paymentChartInstance.current = new Chart(paymentChartRef.current, {
-                type: 'polarArea',
-                data: {
-                    labels: Object.keys(payMap),
-                    datasets: [{
-                        data: Object.values(payMap),
-                        backgroundColor: CHART_PALETTE.map(c => c + 'AA'),
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { 
-                        legend: { position: 'bottom' },
-                        tooltip: { callbacks: { label: (c) => ` ${c.label}: ${formatCLP(c.raw)}` } }
-                    },
-                    scales: { r: { ticks: { display: false } } }
-                }
-            });
-        }
-    } else {
-        if (categoryChartInstance.current) { categoryChartInstance.current.destroy(); categoryChartInstance.current = null; }
-        if (paymentChartInstance.current) { paymentChartInstance.current.destroy(); paymentChartInstance.current = null; }
-    }
-  }, [showDetailedStats, expensesInTimeRange, categories]);
+  // Los gráficos ahora se renderizan con componentes ligeros basados en div/svg.
 
   // Manejadores
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!amountInput || !selectedCategory) { showNotification("Datos incompletos", "error"); return; }
-    setLoading(true);
-    const payload = { fecha: dateInput, categoria_id: selectedCategory, monto: parseInt(amountInput), metodo_pago: paymentMethod, descripcion: descriptionInput || categories.find(c => c.id === selectedCategory)?.nombre };
-    editingId ? await updateGasto(editingId, payload) : await createGasto(payload);
-    await loadData(); resetForm(); setLoading(false);
-  };
+        e.preventDefault();
+        if (!amountInput || !selectedCategory) {
+            showNotification("Datos incompletos", "error");
+            return;
+        }
+        const selectedCategoryObj = categories.find(c => c.id === selectedCategory);
+        if (!selectedCategoryObj) {
+            showNotification("La categoría seleccionada no existe. Actualiza la página o selecciona otra.", "error");
+            return;
+        }
+        setLoading(true);
+        const payload = {
+            fecha: dateInput,
+            categoria: Number(selectedCategory), // Debe ser numérico para el backend
+            monto: parseInt(amountInput, 10),
+            metodo_pago: paymentMethod,
+            descripcion: descriptionInput || selectedCategoryObj?.nombre,
+            categoria_nombre: selectedCategoryObj?.nombre
+        };
+        if (editingId) {
+            await updateGasto(editingId, payload);
+        } else {
+            await createGasto(payload);
+        }
+        await loadData();
+        resetForm();
+        setLoading(false);
+    };
   const handleEdit = (g) => { setEditingId(g.id); setAmountInput(g.monto); setSelectedCategory(g.categoria_id); setDescriptionInput(g.descripcion); setDateInput(g.fecha); setPaymentMethod(g.metodo_pago); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  const handleDelete = async (id) => { if(window.confirm("¿Borrar?")) { await deleteGasto(id); loadData(); } };
+    const handleDelete = async (id) => {
+        if (!id) return;
+        if (!window.confirm("¿Borrar este gasto?")) return;
+        setLoading(true);
+        try {
+            await deleteGasto(id);
+            showNotification('Gasto eliminado correctamente', 'success');
+            await loadData();
+        } catch (error) {
+            showNotification('Error al eliminar el gasto', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
   const resetForm = () => { setEditingId(null); setAmountInput(""); setSelectedCategory(null); setDescriptionInput(""); setPaymentMethod("Efectivo"); setDateInput(new Date().toISOString().split('T')[0]); };
   const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
   const filterTitles = { 'day': 'Resumen de Hoy', 'week': 'Resumen de esta Semana', 'month': 'Resumen de este Mes', 'year': 'Resumen Anual' };
@@ -394,7 +555,7 @@ function ExpensesPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 relative overflow-hidden">
                     <div className="flex justify-between items-start"><div><p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Gastos ({filterTitles[timeFilter].split(' ')[2]})</p><p className="text-3xl font-black text-slate-800 dark:text-white mt-1">{formatCLP(totalGastosFiltrados)}</p></div></div>
                     <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2 mt-3 overflow-hidden"><div className={`h-full rounded-full transition-all duration-500 ${budgetColor}`} style={{ width: `${Math.min(porcentajePresupuesto, 100)}%` }}></div></div><p className="text-xs text-slate-400 mt-2">Presupuesto ref: {formatCLP(timeFilter === 'year' ? budgetLimit * 12 : budgetLimit)}</p>
@@ -403,26 +564,79 @@ function ExpensesPage() {
                     <p className={`text-xs font-bold uppercase tracking-wider ${gananciaNeta >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{gananciaNeta >= 0 ? 'Ganancia Estimada' : 'Pérdida Estimada'}</p>
                     <p className={`text-3xl font-black mt-1 ${gananciaNeta >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700'}`}>{formatCLP(gananciaNeta)}</p>
                     <p className="text-xs opacity-70 mt-2">En este periodo</p>
+                    {monthlyReportStatus === 'loading' && <p className="text-[11px] text-slate-500 mt-2">Sincronizando ventas del mes...</p>}
+                    {monthlyReportStatus === 'error' && <p className="text-[11px] text-red-500 mt-2">{monthlyReportError}</p>}
+                </div>
+                <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Ventas reales del mes</p>
+                    <p className="text-3xl font-black text-indigo-700 dark:text-indigo-300 mt-1">{formatCLP(monthlyReport.totalVentas)}</p>
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                        <div className="rounded border border-emerald-200 dark:border-emerald-800 p-3">
+                            <p className="text-[11px] uppercase text-emerald-600 font-bold">Efectivo</p>
+                            <p className="text-xl font-black text-emerald-700">{formatCLP(efectivoData.total)}</p>
+                            <p className="text-[11px] text-slate-500">{getMetodoCantidad(efectivoData)} ventas</p>
+                        </div>
+                        <div className="rounded border border-indigo-200 dark:border-indigo-800 p-3">
+                            <p className="text-[11px] uppercase text-indigo-600 font-bold">Débito/Terminal</p>
+                            <p className="text-xl font-black text-indigo-700">{formatCLP(terminalData.total)}</p>
+                            <p className="text-[11px] text-slate-500">{getMetodoCantidad(terminalData)} ventas</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-4 relative">
                 <div className="flex justify-between items-center mb-2"><h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{filterTitles[timeFilter]}</h3><div className="flex items-center gap-2"><button onClick={() => setShowDetailedStats(!showDetailedStats)} className={`text-xs font-bold px-3 py-1 rounded-full transition-colors ${showDetailedStats ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{showDetailedStats ? 'Menos ▲' : 'Más Detalles ▼'}</button></div></div>
-                <div className="h-48 w-full"><canvas ref={mainChartRef}></canvas></div>
-                {showDetailedStats && <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fade-in-down"><div className="h-48"><h4 className="text-center text-xs font-bold text-slate-400 mb-2">Por Categoría</h4><canvas ref={categoryChartRef}></canvas></div><div className="h-48"><h4 className="text-center text-xs font-bold text-slate-400 mb-2">Por Método de Pago</h4><canvas ref={paymentChartRef}></canvas></div></div>}
+                <div className="h-48 w-full">
+                    <SimpleBarChart labels={mainChartData.labels} data={mainChartData.data} colors={mainChartData.colors} />
+                </div>
+                {showDetailedStats && (
+                    <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fade-in-down">
+                        <div className="h-48 flex flex-col">
+                            <h4 className="text-center text-xs font-bold text-slate-400 mb-2">Por Categoría</h4>
+                            <SimpleDonutChart segments={categoryBreakdown} />
+                            <ChartLegend segments={categoryBreakdown} />
+                        </div>
+                        <div className="h-48 flex flex-col">
+                            <h4 className="text-center text-xs font-bold text-slate-400 mb-2">Por Método de Pago</h4>
+                            <SimpleDonutChart segments={paymentBreakdown} />
+                            <ChartLegend segments={paymentBreakdown} />
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
                 <div className="p-4 border-b border-slate-100 dark:border-slate-700"><div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"><h3 className="font-bold text-slate-700 dark:text-slate-200">Listado ({expensesInTimeRange.length})</h3><div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto no-scrollbar"><button onClick={() => setListFilter('all')} className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${listFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>Todos</button>{categories.slice(0, 3).map(cat => (<button key={cat.id} onClick={() => setListFilter(listFilter === cat.id ? 'all' : cat.id)} className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${listFilter === cat.id ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{cat.nombre}</button>))}</div></div></div>
                 <div className="max-h-[250px] overflow-y-auto">
-                    {filteredListExpenses.length === 0 ? <p className="p-8 text-center text-slate-400 text-sm">No hay gastos en este periodo.</p> : (
+                    {filteredListExpenses.length === 0 ? (
+                        <p className="p-8 text-center text-slate-400 text-sm">No hay gastos en este periodo.</p>
+                    ) : (
                         <div className="divide-y divide-slate-50 dark:divide-slate-700">
                             {filteredListExpenses.slice().reverse().map(g => {
-                                const cat = categories.find(c => c.id === g.categoria_id) || {};
+                                const expenseCatId = Number(g.categoria_id ?? g.categoria);
+                                const cat = categories.find(c => c.id === expenseCatId);
+                                const nombreCategoria = cat ? cat.nombre : (g.categoria_nombre || 'Otros');
+                                const iconCategoria = cat ? cat.icon : '📦';
+                                const colorCategoria = cat ? cat.color?.split(' ')[0] : 'bg-gray-100';
                                 return (
-                                    <div key={g.id} className="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition cursor-default group">
-                                        <div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${cat.color ? cat.color.split(' ')[0] : 'bg-gray-100'}`}>{cat.icon || '📄'}</div><div><p className="font-bold text-sm text-slate-800 dark:text-slate-200">{g.descripcion || cat.nombre}</p><p className="text-xs text-slate-400">{new Date(g.fecha).toLocaleDateString('es-CL')} • {g.metodo_pago}</p></div></div>
-                                        <div className="flex flex-col items-end"><span className="font-bold text-slate-800 dark:text-white">{formatCLP(g.monto)}</span><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEdit(g)} className="text-xs text-indigo-500 font-medium hover:underline">Editar</button><button onClick={() => handleDelete(g.id)} className="text-xs text-red-500 font-medium hover:underline">Borrar</button></div></div>
+                                    <div key={g.id} className="relative p-4 grid grid-cols-[auto_1fr_auto] items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition cursor-default group">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${colorCategoria}`}>{iconCategoria}</div>
+                                        <div>
+                                            <p className="font-bold text-sm text-slate-800 dark:text-slate-200">{g.descripcion || nombreCategoria}</p>
+                                            <p className="text-xs text-slate-400">{new Date(g.fecha).toLocaleDateString('es-CL')} • {g.metodo_pago}</p>
+                                        </div>
+                                        <div className="flex flex-col items-end">
+                                            <span className="font-bold text-slate-800 dark:text-white">{formatCLP(g.monto)}</span>
+                                            <button
+                                                onClick={() => handleDelete(g.id)}
+                                                className="mt-2 text-3xl font-extrabold text-red-600 bg-transparent border-none cursor-pointer focus:outline-none"
+                                                style={{ lineHeight: '1', width: '40px', height: '40px' }}
+                                                title="Eliminar gasto"
+                                            >
+                                                X
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             })}

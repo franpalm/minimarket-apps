@@ -39,14 +39,19 @@ class Usuario(AbstractUser):
     )
     rol = models.CharField(max_length=20, choices=ROLES, default='usuario')
     activo = models.BooleanField(default=True)
-
-    @property
-    def is_active(self):
-        return self.activo
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     ultimo_acceso = models.DateTimeField(null=True, blank=True)
     recovery_token = models.CharField(max_length=64, blank=True, null=True)
     recovery_token_expiry = models.DateTimeField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        # Mantener sincronizado el flag nativo de Django para compatibilidad con auth
+        self.is_active = self.activo if self.activo is not None else True
+        super().save(*args, **kwargs)
+
+    def refresh_from_db(self, *args, **kwargs):
+        super().refresh_from_db(*args, **kwargs)
+        self.activo = self.is_active
 
     def __str__(self):
         return f"{self.username} ({self.rol})"

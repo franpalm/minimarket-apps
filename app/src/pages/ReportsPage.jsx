@@ -9,13 +9,12 @@ import ReportFilters from '../components/Report/ReportFilters';
 import PulsoDelDia from '../components/Report/Dia/PulsoDelDia';
 import InformeSemanal from '../components/Report/Semana/InformeSemanal';
 import InformeMensual from '../components/Report/Mes/InformeMensual';
-import AnalisisProducto from '../components/Report/Analisis_Producto/AnalisisProducto';
+
 
 const TAB_LIST = [
   { key: 'daily', label: 'El Pulso del Día', icon: 'bi bi-heart-pulse' },
   { key: 'weekly', label: 'Informe Semanal', icon: 'bi bi-bar-chart-line' },
-  { key: 'monthly', label: 'Informe Mensual', icon: 'bi bi-calendar3' },
-  { key: 'products', label: 'Análisis de Productos', icon: 'bi bi-box-seam' }
+  { key: 'monthly', label: 'Informe Mensual', icon: 'bi bi-calendar3' }
 ];
 
 function getToday() {
@@ -135,13 +134,6 @@ function ReportsPage() {
           if (appliedFilters.usuario) params.push(`usuario=${appliedFilters.usuario}`);
           if (appliedFilters.terminal_status) params.push(`terminal_status=${appliedFilters.terminal_status}`);
           url = `http://localhost:8000/api/reportes/mensual/?${params.join('&')}`;
-        } else if (activeTab === 'products') {
-          if (appliedFilters.dateFrom) params.push(`dateFrom=${appliedFilters.dateFrom}`);
-          if (appliedFilters.dateTo) params.push(`dateTo=${appliedFilters.dateTo}`);
-          if (appliedFilters.payment) params.push(`payment=${appliedFilters.payment}`);
-          if (appliedFilters.usuario) params.push(`usuario=${appliedFilters.usuario}`);
-          if (appliedFilters.terminal_status) params.push(`terminal_status=${appliedFilters.terminal_status}`);
-          url = `http://localhost:8000/api/analisis-productos/${params.length ? '?' + params.join('&') : ''}`;
         } else {
           setReportData(null);
           setLoading(false);
@@ -258,9 +250,7 @@ function ReportsPage() {
       };
       return <InformeMensual reportData={reportData} formatCLP={formatCLP} onMonthChange={handleMonthChange} month={filters.month} year={filters.year} />;
     }
-    if (activeTab === 'products') {
-      return <AnalisisProducto reportData={reportData} resumen={reportData?.resumen || {}} formatCLP={formatCLP} />;
-    }
+    
     // Si no es ninguno de los tabs conocidos, renderiza vacío o un mensaje
     return null;
   };

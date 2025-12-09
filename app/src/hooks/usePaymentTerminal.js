@@ -38,7 +38,7 @@ export const usePaymentTerminal = () => {
 
     try {
       // 1. Llama a la NUEVA ruta del backend de Django
-      const response = await fetch(`${BACKEND_URL}/mercadopago/create-intent/`, {
+      const response = await fetch(`${BACKEND_URL}/mp/create-intent/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -75,7 +75,7 @@ export const usePaymentTerminal = () => {
         console.log(`[React] Verificando estado de ${intentId}...`);
         
         // 2. Llama a la NUEVA ruta de verificación
-        const response = await fetch(`${BACKEND_URL}/mercadopago/check-status/${intentId}/`, {
+        const response = await fetch(`${BACKEND_URL}/mp/check-intent/${intentId}/`, {
            headers: {
              // 'Authorization': `Bearer ${tuTokenJWT}` // Añadir si es necesario
            }

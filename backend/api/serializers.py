@@ -95,9 +95,44 @@ class CategoriaGastoSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class GastoSerializer(serializers.ModelSerializer):
+    categoria_nombre = serializers.SerializerMethodField()
+    categoria_id = serializers.SerializerMethodField()
+    monto = serializers.DecimalField(max_digits=12, decimal_places=2, coerce_to_string=False)
+
     class Meta:
         model = Gasto
-        fields = '__all__'
+        fields = [
+            'id',
+            'fecha',
+            'categoria',
+            'categoria_id',
+            'categoria_nombre',
+            'monto',
+            'metodo_pago',
+            'descripcion',
+            'usuario',
+            'comprobante_url',
+            'creado_en',
+        ]
+        read_only_fields = ('creado_en',)
+        extra_kwargs = {
+            'categoria': {'required': True, 'allow_null': False},
+            'usuario': {'required': False, 'allow_null': True},
+        }
+
+    def get_categoria_nombre(self, obj):
+        return obj.categoria.nombre if obj.categoria else None
+
+    def get_categoria_id(self, obj):
+        return obj.categoria_id
+
+    def validate(self, attrs):
+        categoria = attrs.get('categoria')
+        if self.instance is None and categoria is None:
+            raise serializers.ValidationError({'categoria': 'La categoría es obligatoria.'})
+        if categoria is None and self.instance is not None and 'categoria' in attrs:
+            raise serializers.ValidationError({'categoria': 'No puedes dejar la categoría vacía.'})
+        return super().validate(attrs)
 
 class UsuarioSerializer(serializers.ModelSerializer):
     class Meta:

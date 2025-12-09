@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const daysOfWeek = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -38,6 +38,24 @@ const InformeSemanal = ({ reportData, formatCLP, selectedWeek, onWeekChange }) =
         link.parentNode.removeChild(link);
       }
     };
+  const breakdownByPayment = useMemo(() => {
+    if (reportData?.breakdownByPayment && Object.keys(reportData.breakdownByPayment).length > 0) {
+      return reportData.breakdownByPayment;
+    }
+    if (!reportData?.ventas) {
+      return {};
+    }
+    return reportData.ventas.reduce((acc, venta) => {
+      const key = (venta.metodo_pago || 'desconocido').toLowerCase();
+      if (!acc[key]) {
+        acc[key] = { cantidad: 0, total: 0 };
+      }
+      acc[key].cantidad += 1;
+      acc[key].total += Number(venta.total_venta) || 0;
+      return acc;
+    }, {});
+  }, [reportData]);
+
   if (!reportData || Object.keys(reportData).length === 0 || reportData.error) {
     return (
       <div className="text-gray-400 py-12 text-center">
@@ -99,12 +117,25 @@ const InformeSemanal = ({ reportData, formatCLP, selectedWeek, onWeekChange }) =
           <span className="text-xs text-gray-400 mt-1">Promedio gastado por cada cliente en una compra.</span>
         </div>
       </div>
+      {/* Split por método de pago */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold mb-2">Efectivo</h3>
+          <div className="text-2xl font-bold text-green-700">{formatCLP((breakdownByPayment?.efectivo?.total) || 0)}</div>
+          <div className="text-xs text-gray-500">{(breakdownByPayment?.efectivo?.cantidad) || 0} ventas</div>
+        </div>
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold mb-2">Débito/Terminal</h3>
+          <div className="text-2xl font-bold text-blue-700">{formatCLP((breakdownByPayment?.terminal?.total) || 0)}</div>
+          <div className="text-xs text-gray-500">{(breakdownByPayment?.terminal?.cantidad) || 0} ventas</div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
           <h3 className="font-semibold mb-2 text-indigo-700">Métodos de pago</h3>
           <ul className="space-y-1">
-            {Object.entries(reportData.breakdownByPayment || {}).map(([metodo, val]) => (
+            {Object.entries(breakdownByPayment || {}).map(([metodo, val]) => (
               <li key={metodo} className="flex justify-between">
                 <span className="capitalize">{metodo}:</span>
                 <span>

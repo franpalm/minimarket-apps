@@ -284,17 +284,21 @@ export default function SalesPage() {
       let intentId = null;
       let metodoPago = finalPaymentMethod;
 
+      // Validación de efectivo: debe cubrir el total
       if (finalPaymentMethod === 'efectivo' && (!cashReceived || cashReceived < cartTotal)) {
          showToast('Error', 'Monto inválido.', 'error');
          setIsProcessingSale(false);
          return;
       }
 
-      // Solo efectivo y débito
-      if (finalPaymentMethod === 'Tarjeta') {
-        metodoPago = 'Tarjeta';
-      } else {
+      // Mapear correctamente el método de pago para el backend
+      const normalizedMethod = (finalPaymentMethod || '').toLowerCase();
+      if (normalizedMethod === 'efectivo') {
         metodoPago = 'efectivo';
+      } else if (['terminal', 'tarjeta', 'débito', 'debito'].includes(normalizedMethod)) {
+        metodoPago = 'terminal';
+      } else {
+        metodoPago = finalPaymentMethod;
       }
 
       const detalles = cartItems.map(item => ({
@@ -309,14 +313,14 @@ export default function SalesPage() {
         metodo_pago: metodoPago,
         usuario_id: 1,
         monto_total: cartTotal,
-        monto_recibido: cashReceived || cartTotal,
-        vuelto: changeDue || 0,
+        monto_recibido: metodoPago === 'efectivo' ? (cashReceived || cartTotal) : cartTotal,
+        vuelto: metodoPago === 'efectivo' ? (changeDue || 0) : 0,
         intent_id: intentId,
         maquina: maquinaId // Enviar el id de la máquina activa
       };
 
       if (terminalResult) {
-         payload.informacion_terminal = { ...terminalResult };
+        payload.informacion_terminal = { ...terminalResult };
       }
 
       const response = await authFetch('http://localhost:8000/api/ventas/', {
